@@ -97,6 +97,7 @@
     "dashboard": "Dashboard",
     "basic_settings": "Basic Settings",
     "api_keys": "API Keys",
+    "api_key_policies": "API Key Policies",
     "ai_providers": "AI Providers",
     "auth_files": "Auth Files",
     "oauth": "OAuth Login",

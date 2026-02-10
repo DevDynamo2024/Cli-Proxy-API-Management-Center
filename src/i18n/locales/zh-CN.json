@@ -97,6 +97,7 @@
     "dashboard": "仪表盘",
     "basic_settings": "基础设置",
     "api_keys": "API 密钥",
+    "api_key_policies": "API Key 策略",
     "ai_providers": "AI 提供商",
     "auth_files": "认证文件",
     "oauth": "OAuth 登录",

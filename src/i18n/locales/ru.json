@@ -97,6 +97,7 @@
     "dashboard": "Панель",
     "basic_settings": "Основные настройки",
     "api_keys": "API ключи",
+    "api_key_policies": "Политики API ключей",
     "ai_providers": "Поставщики AI",
     "auth_files": "Файлы аутентификации",
     "oauth": "OAuth вход",
