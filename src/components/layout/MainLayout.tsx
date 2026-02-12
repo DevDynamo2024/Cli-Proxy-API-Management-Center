@@ -17,6 +17,7 @@ import {
   IconChartLine,
   IconFileText,
   IconInfo,
+  IconKey,
   IconLayoutDashboard,
   IconScrollText,
   IconSettings,
@@ -44,6 +45,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   quota: <IconTimer size={18} />,
   usage: <IconChartLine size={18} />,
   config: <IconSettings size={18} />,
+  key: <IconKey size={18} />,
   logs: <IconScrollText size={18} />,
   system: <IconInfo size={18} />,
 };
@@ -351,6 +353,7 @@ export function MainLayout() {
   const navItems = [
     { path: '/', label: t('nav.dashboard'), icon: sidebarIcons.dashboard },
     { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
+    { path: '/api-key-policies', label: t('nav.api_key_policies'), icon: sidebarIcons.key },
     { path: '/ai-providers', label: t('nav.ai_providers'), icon: sidebarIcons.aiProviders },
     { path: '/auth-files', label: t('nav.auth_files'), icon: sidebarIcons.authFiles },
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },

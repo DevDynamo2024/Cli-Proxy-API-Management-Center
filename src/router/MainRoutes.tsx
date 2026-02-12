@@ -16,6 +16,7 @@ import { OAuthPage } from '@/pages/OAuthPage';
 import { QuotaPage } from '@/pages/QuotaPage';
 import { UsagePage } from '@/pages/UsagePage';
 import { ConfigPage } from '@/pages/ConfigPage';
+import { APIKeyPoliciesPage } from '@/pages/APIKeyPoliciesPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
 
@@ -58,6 +59,7 @@ const mainRoutes = [
   { path: '/quota', element: <QuotaPage /> },
   { path: '/usage', element: <UsagePage /> },
   { path: '/config', element: <ConfigPage /> },
+  { path: '/api-key-policies', element: <APIKeyPoliciesPage /> },
   { path: '/logs', element: <LogsPage /> },
   { path: '/system', element: <SystemPage /> },
   { path: '*', element: <Navigate to="/" replace /> },
