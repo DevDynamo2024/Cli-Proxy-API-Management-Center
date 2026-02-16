@@ -9,6 +9,8 @@ export interface ApiKeyPolicy {
   excludedModels: string[];
   allowClaudeOpus46: boolean;
   dailyLimits: Record<string, number>;
+  claudeFailoverEnabled: boolean;
+  claudeFailoverTargetModel: string;
 }
 
 type ApiKeyPolicyDTO = {
@@ -16,6 +18,7 @@ type ApiKeyPolicyDTO = {
   'excluded-models'?: unknown;
   'allow-claude-opus-4-6'?: unknown;
   'daily-limits'?: unknown;
+  failover?: unknown;
 };
 
 function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
@@ -43,7 +46,30 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     }
   }
 
-  return { apiKey, excludedModels, allowClaudeOpus46, dailyLimits };
+  const failoverRaw = dto.failover;
+  let claudeFailoverEnabled = false;
+  let claudeFailoverTargetModel = '';
+  if (failoverRaw && typeof failoverRaw === 'object' && !Array.isArray(failoverRaw)) {
+    const claudeRaw = (failoverRaw as Record<string, unknown>).claude;
+    if (claudeRaw && typeof claudeRaw === 'object' && !Array.isArray(claudeRaw)) {
+      const enabledRaw = (claudeRaw as Record<string, unknown>).enabled;
+      claudeFailoverEnabled = typeof enabledRaw === 'boolean' ? enabledRaw : Boolean(enabledRaw);
+      const targetRaw = (claudeRaw as Record<string, unknown>)['target-model'];
+      claudeFailoverTargetModel = String(targetRaw ?? '').trim();
+    }
+  }
+  if (claudeFailoverEnabled && !claudeFailoverTargetModel) {
+    claudeFailoverTargetModel = 'gpt-5.2(high)';
+  }
+
+  return {
+    apiKey,
+    excludedModels,
+    allowClaudeOpus46,
+    dailyLimits,
+    claudeFailoverEnabled,
+    claudeFailoverTargetModel
+  };
 }
 
 function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
@@ -51,7 +77,13 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     'api-key': policy.apiKey,
     'excluded-models': policy.excludedModels,
     'allow-claude-opus-4-6': policy.allowClaudeOpus46,
-    'daily-limits': policy.dailyLimits
+    'daily-limits': policy.dailyLimits,
+    failover: {
+      claude: {
+        enabled: Boolean(policy.claudeFailoverEnabled),
+        'target-model': String(policy.claudeFailoverTargetModel ?? '').trim()
+      }
+    }
   };
 }
 
@@ -78,4 +110,3 @@ export const apiKeyPoliciesApi = {
     await apiClient.delete(`/api-key-policies?api-key=${encodeURIComponent(key)}`);
   }
 };
-
