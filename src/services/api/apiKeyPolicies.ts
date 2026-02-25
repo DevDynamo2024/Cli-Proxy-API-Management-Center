@@ -9,11 +9,20 @@ export interface ModelFailoverRule {
   targetModel: string;
 }
 
+export interface ModelRoutingRule {
+  enabled: boolean;
+  fromModel: string;
+  targetModel: string;
+  targetPercent: number;
+  stickyWindowSeconds: number;
+}
+
 export interface ApiKeyPolicy {
   apiKey: string;
   excludedModels: string[];
   allowClaudeOpus46: boolean;
   dailyLimits: Record<string, number>;
+  modelRoutingRules: ModelRoutingRule[];
   claudeFailoverEnabled: boolean;
   claudeFailoverTargetModel: string;
   claudeFailoverRules: ModelFailoverRule[];
@@ -24,12 +33,21 @@ type ApiKeyPolicyDTO = {
   'excluded-models'?: unknown;
   'allow-claude-opus-4-6'?: unknown;
   'daily-limits'?: unknown;
+  'model-routing'?: unknown;
   failover?: unknown;
 };
 
 type ModelFailoverRuleDTO = {
   'from-model'?: unknown;
   'target-model'?: unknown;
+};
+
+type ModelRoutingRuleDTO = {
+  enabled?: unknown;
+  'from-model'?: unknown;
+  'target-model'?: unknown;
+  'target-percent'?: unknown;
+  'sticky-window-seconds'?: unknown;
 };
 
 function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
@@ -88,11 +106,42 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     claudeFailoverTargetModel = 'gpt-5.2(high)';
   }
 
+  let modelRoutingRules: ModelRoutingRule[] = [];
+  const routingRaw = dto['model-routing'];
+  if (routingRaw && typeof routingRaw === 'object' && !Array.isArray(routingRaw)) {
+    const rulesRaw = (routingRaw as Record<string, unknown>).rules;
+    if (Array.isArray(rulesRaw)) {
+      modelRoutingRules = rulesRaw
+        .map((r) => {
+          if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+          const rule = r as Partial<ModelRoutingRuleDTO> & Record<string, unknown>;
+          const enabledRaw = rule.enabled;
+          const enabled = typeof enabledRaw === 'boolean' ? enabledRaw : enabledRaw == null ? true : Boolean(enabledRaw);
+
+          const fromModel = String(rule['from-model'] ?? '').trim();
+          const targetModel = String(rule['target-model'] ?? '').trim();
+
+          const percentRaw = rule['target-percent'];
+          const percentNum = typeof percentRaw === 'number' ? percentRaw : Number(String(percentRaw ?? ''));
+          const targetPercent = Number.isFinite(percentNum) ? Math.max(0, Math.min(100, Math.floor(percentNum))) : 0;
+
+          const windowRaw = rule['sticky-window-seconds'];
+          const windowNum = typeof windowRaw === 'number' ? windowRaw : Number(String(windowRaw ?? ''));
+          const stickyWindowSeconds = Number.isFinite(windowNum) && windowNum > 0 ? Math.floor(windowNum) : 3600;
+
+          if (!fromModel || !targetModel) return null;
+          return { enabled, fromModel, targetModel, targetPercent, stickyWindowSeconds };
+        })
+        .filter(Boolean) as ModelRoutingRule[];
+    }
+  }
+
   return {
     apiKey,
     excludedModels,
     allowClaudeOpus46,
     dailyLimits,
+    modelRoutingRules,
     claudeFailoverEnabled,
     claudeFailoverTargetModel,
     claudeFailoverRules
@@ -100,6 +149,24 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
 }
 
 function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
+  const routingRules = Array.isArray(policy.modelRoutingRules)
+    ? policy.modelRoutingRules
+        .map((r) => ({
+          enabled: Boolean(r?.enabled ?? true),
+          'from-model': String(r?.fromModel ?? '').trim(),
+          'target-model': String(r?.targetModel ?? '').trim(),
+          'target-percent':
+            typeof r?.targetPercent === 'number'
+              ? Math.max(0, Math.min(100, Math.floor(r.targetPercent)))
+              : Number(String(r?.targetPercent ?? 0)) || 0,
+          'sticky-window-seconds':
+            typeof r?.stickyWindowSeconds === 'number'
+              ? Math.max(1, Math.floor(r.stickyWindowSeconds))
+              : Number(String(r?.stickyWindowSeconds ?? 3600)) || 3600
+        }))
+        .filter((r) => r['from-model'] && r['target-model'])
+    : [];
+
   const rules = Array.isArray(policy.claudeFailoverRules)
     ? policy.claudeFailoverRules
         .map((r) => ({
@@ -114,6 +181,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     'excluded-models': policy.excludedModels,
     'allow-claude-opus-4-6': policy.allowClaudeOpus46,
     'daily-limits': policy.dailyLimits,
+    'model-routing': { rules: routingRules },
     failover: {
       claude: {
         enabled: Boolean(policy.claudeFailoverEnabled),
