@@ -1,71 +1,270 @@
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
 .container {
-  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: $spacing-lg;
 }
 
 .pageHeader {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: $spacing-sm;
 }
 
 .pageTitle {
   margin: 0;
-  font-size: 24px;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
 }
 
 .description {
   margin: 0;
-  opacity: 0.8;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .errorBox {
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: rgba(255, 0, 0, 0.08);
-  border: 1px solid rgba(255, 0, 0, 0.18);
+  padding: $spacing-md;
+  border-radius: $radius-md;
+  background: rgba($error-color, 0.1);
+  border: 1px solid rgba($error-color, 0.35);
+  color: $error-color;
+  font-size: 13px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 16px;
-}
+  grid-template-columns: minmax(420px, 520px) 1fr;
+  gap: $spacing-lg;
+  align-items: start;
 
-.leftColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
 }
 
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: $spacing-md;
+
+  :global(.form-group:last-child) {
+    margin-bottom: 0;
+  }
 }
 
-.row {
+.cardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: $radius-full;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+
+  &.configured {
+    color: $success-color;
+    border-color: rgba($success-color, 0.35);
+    background: rgba($success-color, 0.08);
+  }
+}
+
+.selectWrap {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .select {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.2);
-  color: inherit;
+  height: 40px;
+  padding: 0 40px 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-hover);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow), 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.selectIcon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: $radius-full;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @include mobile {
+    width: 100%;
+  }
+}
+
+.tabItem {
+  @include button-reset;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: $radius-full;
+  transition: background-color $transition-fast, color $transition-fast, border-color $transition-fast;
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.tabActive {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  margin-top: $spacing-md;
+  padding-top: $spacing-md;
+  border-top: 1px solid var(--border-color);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.sectionHint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.fieldRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-md;
+  padding: 12px;
+  border-radius: $radius-md;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.fieldText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .actions {
   display: flex;
-  gap: 10px;
+  gap: $spacing-sm;
   flex-wrap: wrap;
+  margin-top: $spacing-lg;
+  padding-top: $spacing-md;
+  border-top: 1px solid var(--border-color);
+
+  :global(.btn) {
+    min-width: 120px;
+  }
+
+  @include mobile {
+    :global(.btn) {
+      min-width: 0;
+      flex: 1;
+    }
+  }
+}
+
+.buttonContent {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-sm;
 }
 
 .quickPick {
@@ -83,47 +282,54 @@
 .ruleList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: $spacing-sm;
 }
 
 .ruleRow {
   display: flex;
-  gap: 10px;
-  align-items: center;
+  gap: $spacing-sm;
+  align-items: flex-start;
 }
 
 .ruleInputs {
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: $spacing-sm;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
 }
 
 .routeRuleList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: $spacing-md;
 }
 
 .routeRuleRow {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.12);
+  gap: $spacing-md;
+  padding: 12px;
+  border-radius: $radius-lg;
+  border: 1px solid var(--border-color);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)),
+    var(--bg-primary);
+  box-shadow: var(--shadow);
 }
 
 .routeRuleHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: $spacing-sm;
 }
 
 .routeRuleToggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
@@ -131,57 +337,64 @@
 .routeRuleInputs {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: $spacing-sm;
 }
 
 .routeRuleParams {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: $spacing-sm;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
 }
 
 .routeRuleParam {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: $spacing-xs;
 }
 
 .modelList {
-  max-height: 420px;
+  max-height: 540px;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: $spacing-sm;
   padding-right: 8px;
 }
 
 .modelItem {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: $spacing-sm;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: $radius-lg;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: border-color $transition-fast, box-shadow $transition-fast, transform $transition-fast;
+
+  &:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  input {
+    margin-top: 4px;
+    accent-color: var(--primary-color);
+  }
 }
 
 .modelId {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-    'Courier New', monospace;
+  font-family: $font-mono;
   font-size: 12px;
-  opacity: 0.9;
+  color: var(--text-primary);
 }
 
 .hint {
-  opacity: 0.75;
+  color: var(--text-secondary);
   font-size: 12px;
-}
-
-@media (max-width: 980px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .routeRuleParams {
-    grid-template-columns: 1fr;
-  }
 }
