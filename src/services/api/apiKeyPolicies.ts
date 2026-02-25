@@ -4,6 +4,11 @@
 
 import { apiClient } from './client';
 
+export interface ModelFailoverRule {
+  fromModel: string;
+  targetModel: string;
+}
+
 export interface ApiKeyPolicy {
   apiKey: string;
   excludedModels: string[];
@@ -11,6 +16,7 @@ export interface ApiKeyPolicy {
   dailyLimits: Record<string, number>;
   claudeFailoverEnabled: boolean;
   claudeFailoverTargetModel: string;
+  claudeFailoverRules: ModelFailoverRule[];
 }
 
 type ApiKeyPolicyDTO = {
@@ -19,6 +25,11 @@ type ApiKeyPolicyDTO = {
   'allow-claude-opus-4-6'?: unknown;
   'daily-limits'?: unknown;
   failover?: unknown;
+};
+
+type ModelFailoverRuleDTO = {
+  'from-model'?: unknown;
+  'target-model'?: unknown;
 };
 
 function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
@@ -49,6 +60,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   const failoverRaw = dto.failover;
   let claudeFailoverEnabled = false;
   let claudeFailoverTargetModel = '';
+  let claudeFailoverRules: ModelFailoverRule[] = [];
   if (failoverRaw && typeof failoverRaw === 'object' && !Array.isArray(failoverRaw)) {
     const claudeRaw = (failoverRaw as Record<string, unknown>).claude;
     if (claudeRaw && typeof claudeRaw === 'object' && !Array.isArray(claudeRaw)) {
@@ -56,6 +68,20 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
       claudeFailoverEnabled = typeof enabledRaw === 'boolean' ? enabledRaw : Boolean(enabledRaw);
       const targetRaw = (claudeRaw as Record<string, unknown>)['target-model'];
       claudeFailoverTargetModel = String(targetRaw ?? '').trim();
+
+      const rulesRaw = (claudeRaw as Record<string, unknown>).rules;
+      if (Array.isArray(rulesRaw)) {
+        claudeFailoverRules = rulesRaw
+          .map((r) => {
+            if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+            const rule = r as Partial<ModelFailoverRuleDTO> & Record<string, unknown>;
+            const fromModel = String(rule['from-model'] ?? '').trim();
+            const targetModel = String(rule['target-model'] ?? '').trim();
+            if (!fromModel || !targetModel) return null;
+            return { fromModel, targetModel };
+          })
+          .filter(Boolean) as ModelFailoverRule[];
+      }
     }
   }
   if (claudeFailoverEnabled && !claudeFailoverTargetModel) {
@@ -68,11 +94,21 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     allowClaudeOpus46,
     dailyLimits,
     claudeFailoverEnabled,
-    claudeFailoverTargetModel
+    claudeFailoverTargetModel,
+    claudeFailoverRules
   };
 }
 
 function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
+  const rules = Array.isArray(policy.claudeFailoverRules)
+    ? policy.claudeFailoverRules
+        .map((r) => ({
+          'from-model': String(r?.fromModel ?? '').trim(),
+          'target-model': String(r?.targetModel ?? '').trim()
+        }))
+        .filter((r) => r['from-model'] && r['target-model'])
+    : [];
+
   return {
     'api-key': policy.apiKey,
     'excluded-models': policy.excludedModels,
@@ -81,7 +117,8 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     failover: {
       claude: {
         enabled: Boolean(policy.claudeFailoverEnabled),
-        'target-model': String(policy.claudeFailoverTargetModel ?? '').trim()
+        'target-model': String(policy.claudeFailoverTargetModel ?? '').trim(),
+        rules
       }
     }
   };

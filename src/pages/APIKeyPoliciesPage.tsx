@@ -11,12 +11,14 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import { apiKeysApi, apiKeyPoliciesApi, authFilesApi } from '@/services/api';
-import type { ApiKeyPolicy } from '@/services/api/apiKeyPolicies';
+import type { ApiKeyPolicy, ModelFailoverRule } from '@/services/api/apiKeyPolicies';
 import styles from './APIKeyPoliciesPage.module.scss';
 
 type ModelDef = { id: string; display_name?: string };
 
 const OPUS_46_ID = 'claude-opus-4-6';
+const OPUS_46_RULE_PATTERN = 'claude-opus-4-6*';
+const SONNET_46_RULE_PATTERN = 'claude-sonnet-4-6*';
 
 function uniqStrings(list: string[]): string[] {
   const seen = new Set<string>();
@@ -37,6 +39,18 @@ function parsePositiveInt(text: string): number | null {
   if (!Number.isFinite(n)) return null;
   const i = Math.floor(n);
   return i > 0 ? i : null;
+}
+
+function sanitizeFailoverRules(raw: ModelFailoverRule[]): ModelFailoverRule[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const out: ModelFailoverRule[] = [];
+  for (const r of raw) {
+    const fromModel = String(r?.fromModel ?? '').trim();
+    const targetModel = String(r?.targetModel ?? '').trim();
+    if (!fromModel || !targetModel) continue;
+    out.push({ fromModel, targetModel });
+  }
+  return out;
 }
 
 export function APIKeyPoliciesPage() {
@@ -60,6 +74,7 @@ export function APIKeyPoliciesPage() {
   const [excludedCustom, setExcludedCustom] = useState<string[]>([]);
   const [claudeFailoverEnabled, setClaudeFailoverEnabled] = useState(false);
   const [claudeFailoverTargetModel, setClaudeFailoverTargetModel] = useState('gpt-5.2(high)');
+  const [claudeFailoverRules, setClaudeFailoverRules] = useState<ModelFailoverRule[]>([]);
 
   const claudeModelIdSet = useMemo(() => new Set(claudeModels.map((m) => m.id)), [claudeModels]);
 
@@ -124,12 +139,14 @@ export function APIKeyPoliciesPage() {
         allowClaudeOpus46: true,
         dailyLimits: {},
         claudeFailoverEnabled: false,
-        claudeFailoverTargetModel: 'gpt-5.2(high)'
+        claudeFailoverTargetModel: 'gpt-5.2(high)',
+        claudeFailoverRules: []
       } as ApiKeyPolicy);
 
     setAllowOpus46(p.allowClaudeOpus46 ?? true);
     setClaudeFailoverEnabled(Boolean(p.claudeFailoverEnabled));
     setClaudeFailoverTargetModel(String(p.claudeFailoverTargetModel ?? '').trim() || 'gpt-5.2(high)');
+    setClaudeFailoverRules(sanitizeFailoverRules(p.claudeFailoverRules ?? []));
 
     const limit = p.dailyLimits?.[OPUS_46_ID] ?? p.dailyLimits?.[OPUS_46_ID.toLowerCase()];
     setOpus46DailyLimit(limit && Number.isFinite(limit) ? String(limit) : '');
@@ -151,6 +168,50 @@ export function APIKeyPoliciesPage() {
     });
   }, []);
 
+  const updateFailoverRule = useCallback((idx: number, patch: Partial<ModelFailoverRule>) => {
+    setClaudeFailoverRules((prev) => {
+      if (idx < 0 || idx >= prev.length) return prev;
+      const next = prev.slice();
+      next[idx] = { ...next[idx], ...patch };
+      return next;
+    });
+  }, []);
+
+  const removeFailoverRule = useCallback((idx: number) => {
+    setClaudeFailoverRules((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const addFailoverRule = useCallback((rule?: Partial<ModelFailoverRule>) => {
+    setClaudeFailoverRules((prev) => [
+      ...prev,
+      { fromModel: String(rule?.fromModel ?? '').trim(), targetModel: String(rule?.targetModel ?? '').trim() }
+    ]);
+  }, []);
+
+  const upsertPresetRule = useCallback((fromModel: string, defaultTargetModel: string) => {
+    const key = String(fromModel ?? '').trim();
+    if (!key) return;
+    setClaudeFailoverRules((prev) => {
+      const normalized = key.toLowerCase();
+      const i = prev.findIndex((r) => String(r?.fromModel ?? '').trim().toLowerCase() === normalized);
+      if (i >= 0) {
+        const next = prev.slice();
+        next[i] = {
+          ...next[i],
+          targetModel: String(next[i].targetModel ?? '').trim() || String(defaultTargetModel ?? '').trim()
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          fromModel: key,
+          targetModel: String(defaultTargetModel ?? '').trim()
+        }
+      ];
+    });
+  }, []);
+
   const handleSave = useCallback(async () => {
     const apiKey = selectedKey.trim();
     if (!apiKey) return;
@@ -160,6 +221,7 @@ export function APIKeyPoliciesPage() {
     if (dailyLimit) dailyLimits[OPUS_46_ID] = dailyLimit;
 
     const excludedModels = uniqStrings([...excludedCustom, ...Array.from(excludedExact)]);
+    const rules = sanitizeFailoverRules(claudeFailoverRules);
 
     try {
       await apiKeyPoliciesApi.upsert({
@@ -168,7 +230,8 @@ export function APIKeyPoliciesPage() {
         excludedModels,
         dailyLimits,
         claudeFailoverEnabled,
-        claudeFailoverTargetModel
+        claudeFailoverTargetModel,
+        claudeFailoverRules: rules
       });
       await loadAll();
       showNotification(t('notification.save_success', { defaultValue: '保存成功' }), 'success');
@@ -179,6 +242,7 @@ export function APIKeyPoliciesPage() {
   }, [
     allowOpus46,
     claudeFailoverEnabled,
+    claudeFailoverRules,
     claudeFailoverTargetModel,
     excludedCustom,
     excludedExact,
@@ -272,6 +336,22 @@ export function APIKeyPoliciesPage() {
             disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
             list="codex-model-definitions"
           />
+          <div className={styles.quickPick}>
+            <Button
+              variant="secondary"
+              disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+              onClick={() => setClaudeFailoverTargetModel('gpt-5.2(high)')}
+            >
+              gpt-5.2(high)
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+              onClick={() => setClaudeFailoverTargetModel('gpt-5.3-codex(high)')}
+            >
+              gpt-5.3-codex(high)
+            </Button>
+          </div>
           <datalist id="codex-model-definitions">
             {codexModels.map((m) => (
               <option key={m.id} value={m.id} />
@@ -282,6 +362,73 @@ export function APIKeyPoliciesPage() {
               defaultValue: '当 Claude 返回限额/鉴权/账号异常等错误时，会自动重试到该模型（建议选择 Codex 模型）。'
             })}
           </div>
+
+          <div className={styles.row}>
+            <div>{t('api_key_policies.failover_rules_title', { defaultValue: '按模型覆盖（可选）' })}</div>
+            <div className={styles.ruleActions}>
+              <Button
+                variant="secondary"
+                disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                onClick={() => upsertPresetRule(OPUS_46_RULE_PATTERN, 'gpt-5.2(high)')}
+              >
+                {t('api_key_policies.add_opus46_rule', { defaultValue: '添加 Opus 4.6' })}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                onClick={() => upsertPresetRule(SONNET_46_RULE_PATTERN, 'gpt-5.3-codex(high)')}
+              >
+                {t('api_key_policies.add_sonnet46_rule', { defaultValue: '添加 Sonnet 4.6' })}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                onClick={() => addFailoverRule({ fromModel: 'claude-*', targetModel: 'gpt-5.2(high)' })}
+              >
+                {t('api_key_policies.add_rule', { defaultValue: '新增规则' })}
+              </Button>
+            </div>
+          </div>
+          {claudeFailoverRules.length === 0 ? (
+            <div className={styles.hint}>
+              {t('api_key_policies.failover_rules_empty', {
+                defaultValue: '未配置规则；留空时将使用上面的默认目标模型。'
+              })}
+            </div>
+          ) : (
+            <div className={styles.ruleList}>
+              {claudeFailoverRules.map((r, idx) => (
+                <div key={`${r.fromModel}-${idx}`} className={styles.ruleRow}>
+                  <div className={styles.ruleInputs}>
+                    <Input
+                      value={r.fromModel}
+                      onChange={(e) => updateFailoverRule(idx, { fromModel: e.target.value })}
+                      placeholder={t('api_key_policies.failover_rule_from_placeholder', {
+                        defaultValue: 'from-model，例如 claude-opus-4-6*'
+                      })}
+                      disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                    />
+                    <Input
+                      value={r.targetModel}
+                      onChange={(e) => updateFailoverRule(idx, { targetModel: e.target.value })}
+                      placeholder={t('api_key_policies.failover_rule_target_placeholder', {
+                        defaultValue: 'target-model，例如 gpt-5.2(high)'
+                      })}
+                      disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                      list="codex-model-definitions"
+                    />
+                  </div>
+                  <Button
+                    variant="danger"
+                    disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                    onClick={() => removeFailoverRule(idx)}
+                  >
+                    {t('common.delete', { defaultValue: '删除' })}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className={styles.actions}>
             <Button onClick={handleSave} disabled={disableControls || !selectedKey || loading}>
