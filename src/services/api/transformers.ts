@@ -271,6 +271,31 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
   const proxyUrl = raw['proxy-url'] ?? raw.proxyUrl;
   config.proxyUrl =
     typeof proxyUrl === 'string' ? proxyUrl : proxyUrl === undefined || proxyUrl === null ? undefined : String(proxyUrl);
+
+  const anthropicBaseUrl = raw['anthropic-base-url'] ?? raw.anthropicBaseUrl;
+  config.anthropicBaseUrl =
+    typeof anthropicBaseUrl === 'string'
+      ? anthropicBaseUrl
+      : anthropicBaseUrl === undefined || anthropicBaseUrl === null
+        ? undefined
+        : String(anthropicBaseUrl);
+
+  const anthropicOAuthAuthUrl = raw['anthropic-oauth-auth-url'] ?? raw.anthropicOAuthAuthUrl;
+  config.anthropicOAuthAuthUrl =
+    typeof anthropicOAuthAuthUrl === 'string'
+      ? anthropicOAuthAuthUrl
+      : anthropicOAuthAuthUrl === undefined || anthropicOAuthAuthUrl === null
+        ? undefined
+        : String(anthropicOAuthAuthUrl);
+
+  const anthropicOAuthTokenUrl = raw['anthropic-oauth-token-url'] ?? raw.anthropicOAuthTokenUrl;
+  config.anthropicOAuthTokenUrl =
+    typeof anthropicOAuthTokenUrl === 'string'
+      ? anthropicOAuthTokenUrl
+      : anthropicOAuthTokenUrl === undefined || anthropicOAuthTokenUrl === null
+        ? undefined
+        : String(anthropicOAuthTokenUrl);
+
   const requestRetry = raw['request-retry'] ?? raw.requestRetry;
   if (typeof requestRetry === 'number' && Number.isFinite(requestRetry)) {
     config.requestRetry = requestRetry;

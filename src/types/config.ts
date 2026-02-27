@@ -14,6 +14,9 @@ export interface QuotaExceededConfig {
 export interface Config {
   debug?: boolean;
   proxyUrl?: string;
+  anthropicBaseUrl?: string;
+  anthropicOAuthAuthUrl?: string;
+  anthropicOAuthTokenUrl?: string;
   requestRetry?: number;
   quotaExceeded?: QuotaExceededConfig;
   usageStatisticsEnabled?: boolean;
@@ -37,6 +40,9 @@ export interface Config {
 export type RawConfigSection =
   | 'debug'
   | 'proxy-url'
+  | 'anthropic-base-url'
+  | 'anthropic-oauth-auth-url'
+  | 'anthropic-oauth-token-url'
   | 'request-retry'
   | 'quota-exceeded'
   | 'usage-statistics-enabled'

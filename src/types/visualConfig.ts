@@ -49,6 +49,9 @@ export type VisualConfigValues = {
   logsMaxTotalSizeMb: string;
   usageStatisticsEnabled: boolean;
   proxyUrl: string;
+  anthropicBaseUrl: string;
+  anthropicOAuthAuthUrl: string;
+  anthropicOAuthTokenUrl: string;
   forceModelPrefix: boolean;
   requestRetry: string;
   maxRetryInterval: string;
@@ -85,6 +88,9 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   logsMaxTotalSizeMb: '',
   usageStatisticsEnabled: false,
   proxyUrl: '',
+  anthropicBaseUrl: '',
+  anthropicOAuthAuthUrl: '',
+  anthropicOAuthTokenUrl: '',
   forceModelPrefix: false,
   requestRetry: '',
   maxRetryInterval: '',

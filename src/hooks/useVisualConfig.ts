@@ -317,6 +317,11 @@ export function useVisualConfig() {
         usageStatisticsEnabled: Boolean(parsed['usage-statistics-enabled']),
 
         proxyUrl: typeof parsed['proxy-url'] === 'string' ? parsed['proxy-url'] : '',
+        anthropicBaseUrl: typeof parsed['anthropic-base-url'] === 'string' ? parsed['anthropic-base-url'] : '',
+        anthropicOAuthAuthUrl:
+          typeof parsed['anthropic-oauth-auth-url'] === 'string' ? parsed['anthropic-oauth-auth-url'] : '',
+        anthropicOAuthTokenUrl:
+          typeof parsed['anthropic-oauth-token-url'] === 'string' ? parsed['anthropic-oauth-token-url'] : '',
         forceModelPrefix: Boolean(parsed['force-model-prefix']),
         requestRetry: String(parsed['request-retry'] ?? ''),
         maxRetryInterval: String(parsed['max-retry-interval'] ?? ''),
@@ -418,6 +423,9 @@ export function useVisualConfig() {
         setBooleanInDoc(doc, ['usage-statistics-enabled'], values.usageStatisticsEnabled);
 
         setStringInDoc(doc, ['proxy-url'], values.proxyUrl);
+        setStringInDoc(doc, ['anthropic-base-url'], values.anthropicBaseUrl);
+        setStringInDoc(doc, ['anthropic-oauth-auth-url'], values.anthropicOAuthAuthUrl);
+        setStringInDoc(doc, ['anthropic-oauth-token-url'], values.anthropicOAuthTokenUrl);
         setBooleanInDoc(doc, ['force-model-prefix'], values.forceModelPrefix);
         setIntFromStringInDoc(doc, ['request-retry'], values.requestRetry);
         setIntFromStringInDoc(doc, ['max-retry-interval'], values.maxRetryInterval);
