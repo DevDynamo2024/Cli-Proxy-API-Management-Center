@@ -280,14 +280,6 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
         ? undefined
         : String(anthropicBaseUrl);
 
-  const anthropicOAuthAuthUrl = raw['anthropic-oauth-auth-url'] ?? raw.anthropicOAuthAuthUrl;
-  config.anthropicOAuthAuthUrl =
-    typeof anthropicOAuthAuthUrl === 'string'
-      ? anthropicOAuthAuthUrl
-      : anthropicOAuthAuthUrl === undefined || anthropicOAuthAuthUrl === null
-        ? undefined
-        : String(anthropicOAuthAuthUrl);
-
   const anthropicOAuthTokenUrl = raw['anthropic-oauth-token-url'] ?? raw.anthropicOAuthTokenUrl;
   config.anthropicOAuthTokenUrl =
     typeof anthropicOAuthTokenUrl === 'string'

@@ -15,7 +15,6 @@ export interface Config {
   debug?: boolean;
   proxyUrl?: string;
   anthropicBaseUrl?: string;
-  anthropicOAuthAuthUrl?: string;
   anthropicOAuthTokenUrl?: string;
   requestRetry?: number;
   quotaExceeded?: QuotaExceededConfig;
@@ -41,7 +40,6 @@ export type RawConfigSection =
   | 'debug'
   | 'proxy-url'
   | 'anthropic-base-url'
-  | 'anthropic-oauth-auth-url'
   | 'anthropic-oauth-token-url'
   | 'request-retry'
   | 'quota-exceeded'

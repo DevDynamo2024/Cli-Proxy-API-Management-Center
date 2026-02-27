@@ -935,8 +935,6 @@
           "proxy_url": "代理 URL",
           "anthropic_base_url": "Anthropic Base URL",
           "anthropic_base_url_hint": "用于替代环境变量 ANTHROPIC_BASE_URL（可选）。当配置了代理 URL 时，将优先使用直连上游 + 代理，而不是该网关地址。",
-          "anthropic_oauth_auth_url": "Anthropic OAuth 授权地址",
-          "anthropic_oauth_auth_url_hint": "生成登录授权链接时使用（可选，默认 https://claude.ai/oauth/authorize）。若 claude.ai 只能通过反代访问，可在此配置。",
           "anthropic_oauth_token_url": "Anthropic OAuth Token 地址",
           "anthropic_oauth_token_url_hint": "交换/刷新 Token 时使用（可选，默认 https://console.anthropic.com/v1/oauth/token）。若 console.anthropic.com 只能通过反代访问，可在此配置。",
           "request_retry": "请求重试次数",

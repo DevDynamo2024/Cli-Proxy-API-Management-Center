@@ -50,7 +50,6 @@ export type VisualConfigValues = {
   usageStatisticsEnabled: boolean;
   proxyUrl: string;
   anthropicBaseUrl: string;
-  anthropicOAuthAuthUrl: string;
   anthropicOAuthTokenUrl: string;
   forceModelPrefix: boolean;
   requestRetry: string;
@@ -89,7 +88,6 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   usageStatisticsEnabled: false,
   proxyUrl: '',
   anthropicBaseUrl: '',
-  anthropicOAuthAuthUrl: '',
   anthropicOAuthTokenUrl: '',
   forceModelPrefix: false,
   requestRetry: '',

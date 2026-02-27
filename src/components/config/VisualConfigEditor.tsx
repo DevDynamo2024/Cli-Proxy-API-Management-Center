@@ -980,14 +980,6 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
               hint={t('config_management.visual.sections.network.anthropic_base_url_hint')}
             />
             <Input
-              label={t('config_management.visual.sections.network.anthropic_oauth_auth_url')}
-              placeholder="https://claude.ai/oauth/authorize"
-              value={values.anthropicOAuthAuthUrl}
-              onChange={(e) => onChange({ anthropicOAuthAuthUrl: e.target.value })}
-              disabled={disabled}
-              hint={t('config_management.visual.sections.network.anthropic_oauth_auth_url_hint')}
-            />
-            <Input
               label={t('config_management.visual.sections.network.anthropic_oauth_token_url')}
               placeholder="https://console.anthropic.com/v1/oauth/token"
               value={values.anthropicOAuthTokenUrl}
