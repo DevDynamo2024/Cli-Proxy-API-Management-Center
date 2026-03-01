@@ -107,12 +107,18 @@ export function APIKeyPoliciesPage() {
   const [opus46DailyLimit, setOpus46DailyLimit] = useState('');
   const [excludedExact, setExcludedExact] = useState<Set<string>>(new Set());
   const [excludedCustom, setExcludedCustom] = useState<string[]>([]);
+  const [upstreamProxyEnabled, setUpstreamProxyEnabled] = useState(false);
+  const [upstreamBaseUrl, setUpstreamBaseUrl] = useState('');
   const [modelRoutingRules, setModelRoutingRules] = useState<ModelRoutingRule[]>([]);
   const [claudeFailoverEnabled, setClaudeFailoverEnabled] = useState(false);
   const [claudeFailoverTargetModel, setClaudeFailoverTargetModel] = useState('gpt-5.2(high)');
   const [claudeFailoverRules, setClaudeFailoverRules] = useState<ModelFailoverRule[]>([]);
 
   const claudeModelIdSet = useMemo(() => new Set(claudeModels.map((m) => m.id)), [claudeModels]);
+  const upstreamBaseUrlTrimmed = upstreamBaseUrl.trim();
+  const upstreamProxyActive = upstreamProxyEnabled && upstreamBaseUrlTrimmed !== '';
+  const routingControlsDisabled = disableControls || !selectedKey;
+  const failoverControlsDisabled = disableControls || !selectedKey;
 
   const currentPolicy = useMemo(() => {
     const key = selectedKey.trim();
@@ -180,6 +186,7 @@ export function APIKeyPoliciesPage() {
       policies.find((x) => x.apiKey === key) ??
       ({
         apiKey: key,
+        upstreamBaseUrl: '',
         excludedModels: [],
         allowClaudeOpus46: true,
         dailyLimits: {},
@@ -204,6 +211,10 @@ export function APIKeyPoliciesPage() {
 
     setExcludedCustom(custom);
     setExcludedExact(new Set(exact));
+
+    const upstream = String(p.upstreamBaseUrl ?? '').trim();
+    setUpstreamBaseUrl(upstream);
+    setUpstreamProxyEnabled(Boolean(upstream));
   }, [claudeModelIdSet, policies, selectedKey]);
 
   const toggleModelAllowed = useCallback((modelId: string, allowed: boolean) => {
@@ -318,6 +329,12 @@ export function APIKeyPoliciesPage() {
     const apiKey = selectedKey.trim();
     if (!apiKey) return;
 
+    const upstreamValue = upstreamProxyEnabled ? upstreamBaseUrl.trim() : '';
+    if (upstreamProxyEnabled && !upstreamValue) {
+      showNotification(t('api_key_policies.upstream_proxy_missing', { defaultValue: '请填写上游 base-url' }), 'error');
+      return;
+    }
+
     const dailyLimit = parsePositiveInt(opus46DailyLimit);
     const dailyLimits: Record<string, number> = {};
     if (dailyLimit) dailyLimits[OPUS_46_ID] = dailyLimit;
@@ -329,6 +346,7 @@ export function APIKeyPoliciesPage() {
     try {
       await apiKeyPoliciesApi.upsert({
         apiKey,
+        upstreamBaseUrl: upstreamValue,
         allowClaudeOpus46: allowOpus46,
         excludedModels,
         dailyLimits,
@@ -355,7 +373,9 @@ export function APIKeyPoliciesPage() {
     opus46DailyLimit,
     selectedKey,
     showNotification,
-    t
+    t,
+    upstreamBaseUrl,
+    upstreamProxyEnabled
   ]);
 
   const handleDelete = useCallback(async () => {
@@ -377,7 +397,7 @@ export function APIKeyPoliciesPage() {
         <h1 className={styles.pageTitle}>{t('api_key_policies.title', { defaultValue: 'API Key 策略' })}</h1>
         <p className={styles.description}>
           {t('api_key_policies.description', {
-            defaultValue: '按不同 API Key 限制可用模型、配置模型路由/Failover、Opus 4.6 访问与每日次数上限（UTC+8）'
+            defaultValue: '按不同 API Key 限制可用模型、配置上游代理转发、模型路由/Failover、Opus 4.6 访问与每日次数上限（UTC+8）'
           })}
         </p>
       </div>
@@ -516,8 +536,54 @@ export function APIKeyPoliciesPage() {
           ) : null}
 
           {activeTab === 'routing' ? (
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
+            <>
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
+                  <h3 className={styles.sectionTitle}>
+                    {t('api_key_policies.upstream_proxy_title', { defaultValue: '上游代理（按 API Key）' })}
+                  </h3>
+                </div>
+                <div className={styles.sectionHint}>
+                  {t('api_key_policies.upstream_proxy_hint', {
+                    defaultValue:
+                      '启用后，该 Key 的 /v1/* 请求会直接转发到此 base-url（把它当成服务商地址）。示例：/v1/models → <base>/v1/models'
+                  })}
+                </div>
+
+                <div className={styles.fieldRow}>
+                  <div className={styles.fieldText}>
+                    <div className={styles.fieldLabel}>
+                      {t('api_key_policies.upstream_proxy_enabled', { defaultValue: '启用上游代理转发' })}
+                    </div>
+                    <div className={styles.fieldHint}>
+                      {t('api_key_policies.upstream_proxy_enabled_hint', {
+                        defaultValue:
+                          '启用后将跳过本机的模型路由/Failover 执行逻辑；如需这些能力请在目标代理上配置。'
+                      })}
+                    </div>
+                  </div>
+                  <ToggleSwitch
+                    checked={upstreamProxyEnabled}
+                    onChange={setUpstreamProxyEnabled}
+                    disabled={disableControls || !selectedKey}
+                    ariaLabel={t('api_key_policies.upstream_proxy_enabled', { defaultValue: '启用上游代理转发' })}
+                  />
+                </div>
+
+                <Input
+                  label={t('api_key_policies.upstream_proxy_base_url', { defaultValue: 'upstream base-url' })}
+                  hint={t('api_key_policies.upstream_proxy_base_url_hint', {
+                    defaultValue: '例如 http://IP:8001 或 http://IP:8001/v1'
+                  })}
+                  value={upstreamBaseUrl}
+                  onChange={(e) => setUpstreamBaseUrl(e.target.value)}
+                  placeholder="http://127.0.0.1:8001/v1"
+                  disabled={disableControls || !selectedKey || !upstreamProxyEnabled}
+                />
+              </div>
+
+              <div className={styles.section}>
+                <div className={styles.sectionHeader}>
                 <h3 className={styles.sectionTitle}>
                   {t('api_key_policies.routing_title', { defaultValue: '模型路由（按时间窗口比例）' })}
                 </h3>
@@ -525,7 +591,7 @@ export function APIKeyPoliciesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={disableControls || !selectedKey}
+                    disabled={routingControlsDisabled}
                     onClick={() => upsertPresetRoutingRule(OPUS_46_RULE_PATTERN, 'gpt-5.2(high)')}
                   >
                     {t('api_key_policies.routing_add_opus46', { defaultValue: 'Opus 4.6' })}
@@ -533,7 +599,7 @@ export function APIKeyPoliciesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={disableControls || !selectedKey}
+                    disabled={routingControlsDisabled}
                     onClick={() => upsertPresetRoutingRule(SONNET_46_RULE_PATTERN, 'gpt-5.3-codex(high)')}
                   >
                     {t('api_key_policies.routing_add_sonnet46', { defaultValue: 'Sonnet 4.6' })}
@@ -541,7 +607,7 @@ export function APIKeyPoliciesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={disableControls || !selectedKey}
+                    disabled={routingControlsDisabled}
                     onClick={() =>
                       addRoutingRule({
                         fromModel: 'claude-*',
@@ -562,6 +628,14 @@ export function APIKeyPoliciesPage() {
                 })}
               </div>
 
+              {upstreamProxyActive ? (
+                <div className={styles.hint}>
+                  {t('api_key_policies.upstream_proxy_conflict_note', {
+                    defaultValue: '已启用上游代理转发，本机模型路由不会执行；请在目标代理上配置路由规则。'
+                  })}
+                </div>
+              ) : null}
+
               {modelRoutingRules.length === 0 ? (
                 <div className={styles.hint}>
                   {t('api_key_policies.routing_empty', { defaultValue: '未配置路由规则；默认不做模型改写。' })}
@@ -575,7 +649,7 @@ export function APIKeyPoliciesPage() {
                           <ToggleSwitch
                             checked={Boolean(r.enabled)}
                             onChange={(enabled) => updateRoutingRule(idx, { enabled })}
-                            disabled={disableControls || !selectedKey}
+                            disabled={routingControlsDisabled}
                             ariaLabel={t('api_key_policies.routing_enabled', { defaultValue: '启用' })}
                           />
                           <div className={styles.hint}>
@@ -585,7 +659,7 @@ export function APIKeyPoliciesPage() {
                         <Button
                           variant="danger"
                           size="sm"
-                          disabled={disableControls || !selectedKey}
+                          disabled={routingControlsDisabled}
                           onClick={() => removeRoutingRule(idx)}
                         >
                           {t('common.delete', { defaultValue: '删除' })}
@@ -599,7 +673,7 @@ export function APIKeyPoliciesPage() {
                           placeholder={t('api_key_policies.routing_from_placeholder', {
                             defaultValue: 'from-model，例如 claude-opus-4-6*'
                           })}
-                          disabled={disableControls || !selectedKey}
+                          disabled={routingControlsDisabled}
                         />
                         <Input
                           value={r.targetModel}
@@ -607,7 +681,7 @@ export function APIKeyPoliciesPage() {
                           placeholder={t('api_key_policies.routing_target_placeholder', {
                             defaultValue: 'target-model，例如 gpt-5.2(high)'
                           })}
-                          disabled={disableControls || !selectedKey}
+                          disabled={routingControlsDisabled}
                           list="codex-model-definitions"
                         />
                       </div>
@@ -615,7 +689,7 @@ export function APIKeyPoliciesPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          disabled={disableControls || !selectedKey}
+                          disabled={routingControlsDisabled}
                           onClick={() => updateRoutingRule(idx, { targetModel: 'gpt-5.2(high)' })}
                         >
                           gpt-5.2(high)
@@ -623,7 +697,7 @@ export function APIKeyPoliciesPage() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          disabled={disableControls || !selectedKey}
+                          disabled={routingControlsDisabled}
                           onClick={() => updateRoutingRule(idx, { targetModel: 'gpt-5.3-codex(high)' })}
                         >
                           gpt-5.3-codex(high)
@@ -640,7 +714,7 @@ export function APIKeyPoliciesPage() {
                             onChange={(e) =>
                               updateRoutingRule(idx, { targetPercent: clampInt(e.target.value, 0, 100, 0) })
                             }
-                            disabled={disableControls || !selectedKey}
+                            disabled={routingControlsDisabled}
                           />
                         </div>
 
@@ -652,7 +726,7 @@ export function APIKeyPoliciesPage() {
                             <select
                               className={styles.select}
                               value={String(r.stickyWindowSeconds ?? DEFAULT_STICKY_WINDOW_SECONDS)}
-                              disabled={disableControls || !selectedKey}
+                              disabled={routingControlsDisabled}
                               onChange={(e) =>
                                 updateRoutingRule(idx, {
                                   stickyWindowSeconds: clampInt(
@@ -693,7 +767,8 @@ export function APIKeyPoliciesPage() {
                   ))}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           ) : null}
 
           {activeTab === 'failover' ? (
@@ -712,10 +787,18 @@ export function APIKeyPoliciesPage() {
                 <ToggleSwitch
                   checked={claudeFailoverEnabled}
                   onChange={setClaudeFailoverEnabled}
-                  disabled={disableControls || !selectedKey}
+                  disabled={failoverControlsDisabled}
                   ariaLabel={t('api_key_policies.claude_failover', { defaultValue: 'Claude 不可用时自动切换' })}
                 />
               </div>
+
+              {upstreamProxyActive ? (
+                <div className={styles.hint}>
+                  {t('api_key_policies.upstream_proxy_failover_note', {
+                    defaultValue: '已启用上游代理转发，本机 Failover 不会执行；请在目标代理上配置 Failover。'
+                  })}
+                </div>
+              ) : null}
 
               <Input
                 label={t('api_key_policies.failover_target', { defaultValue: '默认目标模型' })}
@@ -725,14 +808,14 @@ export function APIKeyPoliciesPage() {
                 value={claudeFailoverTargetModel}
                 onChange={(e) => setClaudeFailoverTargetModel(e.target.value)}
                 placeholder={t('api_key_policies.failover_target_placeholder', { defaultValue: '默认 gpt-5.2(high)' })}
-                disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                 list="codex-model-definitions"
               />
               <div className={styles.quickPick}>
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                  disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                   onClick={() => setClaudeFailoverTargetModel('gpt-5.2(high)')}
                 >
                   gpt-5.2(high)
@@ -740,7 +823,7 @@ export function APIKeyPoliciesPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                  disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                   onClick={() => setClaudeFailoverTargetModel('gpt-5.3-codex(high)')}
                 >
                   gpt-5.3-codex(high)
@@ -755,7 +838,7 @@ export function APIKeyPoliciesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                    disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                     onClick={() => upsertPresetRule(OPUS_46_RULE_PATTERN, 'gpt-5.2(high)')}
                   >
                     {t('api_key_policies.add_opus46_rule', { defaultValue: '添加 Opus 4.6' })}
@@ -763,7 +846,7 @@ export function APIKeyPoliciesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                    disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                     onClick={() => upsertPresetRule(SONNET_46_RULE_PATTERN, 'gpt-5.3-codex(high)')}
                   >
                     {t('api_key_policies.add_sonnet46_rule', { defaultValue: '添加 Sonnet 4.6' })}
@@ -771,7 +854,7 @@ export function APIKeyPoliciesPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                    disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                     onClick={() => addFailoverRule({ fromModel: 'claude-*', targetModel: 'gpt-5.2(high)' })}
                   >
                     {t('api_key_policies.add_rule', { defaultValue: '新增规则' })}
@@ -796,7 +879,7 @@ export function APIKeyPoliciesPage() {
                           placeholder={t('api_key_policies.failover_rule_from_placeholder', {
                             defaultValue: 'from-model，例如 claude-opus-4-6*'
                           })}
-                          disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                          disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                         />
                         <Input
                           value={r.targetModel}
@@ -804,14 +887,14 @@ export function APIKeyPoliciesPage() {
                           placeholder={t('api_key_policies.failover_rule_target_placeholder', {
                             defaultValue: 'target-model，例如 gpt-5.2(high)'
                           })}
-                          disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                          disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                           list="codex-model-definitions"
                         />
                       </div>
                       <Button
                         variant="danger"
                         size="sm"
-                        disabled={disableControls || !selectedKey || !claudeFailoverEnabled}
+                        disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                         onClick={() => removeFailoverRule(idx)}
                       >
                         {t('common.delete', { defaultValue: '删除' })}

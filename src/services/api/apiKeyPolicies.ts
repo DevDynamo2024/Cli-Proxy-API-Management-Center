@@ -19,6 +19,7 @@ export interface ModelRoutingRule {
 
 export interface ApiKeyPolicy {
   apiKey: string;
+  upstreamBaseUrl: string;
   excludedModels: string[];
   allowClaudeOpus46: boolean;
   dailyLimits: Record<string, number>;
@@ -30,6 +31,7 @@ export interface ApiKeyPolicy {
 
 type ApiKeyPolicyDTO = {
   'api-key': string;
+  'upstream-base-url'?: unknown;
   'excluded-models'?: unknown;
   'allow-claude-opus-4-6'?: unknown;
   'daily-limits'?: unknown;
@@ -55,6 +57,9 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   const dto = raw as Partial<ApiKeyPolicyDTO> & Record<string, unknown>;
   const apiKey = String(dto['api-key'] ?? '').trim();
   if (!apiKey) return null;
+
+  const upstreamRaw = dto['upstream-base-url'];
+  const upstreamBaseUrl = upstreamRaw == null ? '' : String(upstreamRaw).trim();
 
   const excluded = dto['excluded-models'];
   const excludedModels = Array.isArray(excluded)
@@ -138,6 +143,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
 
   return {
     apiKey,
+    upstreamBaseUrl,
     excludedModels,
     allowClaudeOpus46,
     dailyLimits,
@@ -178,6 +184,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
 
   return {
     'api-key': policy.apiKey,
+    'upstream-base-url': String(policy.upstreamBaseUrl ?? '').trim(),
     'excluded-models': policy.excludedModels,
     'allow-claude-opus-4-6': policy.allowClaudeOpus46,
     'daily-limits': policy.dailyLimits,
