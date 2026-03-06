@@ -4,6 +4,8 @@
 
 import { apiClient } from './client';
 
+const DEFAULT_CLAUDE_FAILOVER_TARGET_MODEL = 'gpt-5.4(high)';
+
 export interface ModelFailoverRule {
   fromModel: string;
   targetModel: string;
@@ -108,7 +110,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     }
   }
   if (claudeFailoverEnabled && !claudeFailoverTargetModel) {
-    claudeFailoverTargetModel = 'gpt-5.2(high)';
+    claudeFailoverTargetModel = DEFAULT_CLAUDE_FAILOVER_TARGET_MODEL;
   }
 
   let modelRoutingRules: ModelRoutingRule[] = [];
@@ -121,18 +123,28 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
           if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
           const rule = r as Partial<ModelRoutingRuleDTO> & Record<string, unknown>;
           const enabledRaw = rule.enabled;
-          const enabled = typeof enabledRaw === 'boolean' ? enabledRaw : enabledRaw == null ? true : Boolean(enabledRaw);
+          const enabled =
+            typeof enabledRaw === 'boolean'
+              ? enabledRaw
+              : enabledRaw == null
+                ? true
+                : Boolean(enabledRaw);
 
           const fromModel = String(rule['from-model'] ?? '').trim();
           const targetModel = String(rule['target-model'] ?? '').trim();
 
           const percentRaw = rule['target-percent'];
-          const percentNum = typeof percentRaw === 'number' ? percentRaw : Number(String(percentRaw ?? ''));
-          const targetPercent = Number.isFinite(percentNum) ? Math.max(0, Math.min(100, Math.floor(percentNum))) : 0;
+          const percentNum =
+            typeof percentRaw === 'number' ? percentRaw : Number(String(percentRaw ?? ''));
+          const targetPercent = Number.isFinite(percentNum)
+            ? Math.max(0, Math.min(100, Math.floor(percentNum)))
+            : 0;
 
           const windowRaw = rule['sticky-window-seconds'];
-          const windowNum = typeof windowRaw === 'number' ? windowRaw : Number(String(windowRaw ?? ''));
-          const stickyWindowSeconds = Number.isFinite(windowNum) && windowNum > 0 ? Math.floor(windowNum) : 3600;
+          const windowNum =
+            typeof windowRaw === 'number' ? windowRaw : Number(String(windowRaw ?? ''));
+          const stickyWindowSeconds =
+            Number.isFinite(windowNum) && windowNum > 0 ? Math.floor(windowNum) : 3600;
 
           if (!fromModel || !targetModel) return null;
           return { enabled, fromModel, targetModel, targetPercent, stickyWindowSeconds };
@@ -150,7 +162,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     modelRoutingRules,
     claudeFailoverEnabled,
     claudeFailoverTargetModel,
-    claudeFailoverRules
+    claudeFailoverRules,
   };
 }
 
@@ -168,7 +180,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
           'sticky-window-seconds':
             typeof r?.stickyWindowSeconds === 'number'
               ? Math.max(1, Math.floor(r.stickyWindowSeconds))
-              : Number(String(r?.stickyWindowSeconds ?? 3600)) || 3600
+              : Number(String(r?.stickyWindowSeconds ?? 3600)) || 3600,
         }))
         .filter((r) => r['from-model'] && r['target-model'])
     : [];
@@ -177,7 +189,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     ? policy.claudeFailoverRules
         .map((r) => ({
           'from-model': String(r?.fromModel ?? '').trim(),
-          'target-model': String(r?.targetModel ?? '').trim()
+          'target-model': String(r?.targetModel ?? '').trim(),
         }))
         .filter((r) => r['from-model'] && r['target-model'])
     : [];
@@ -193,9 +205,9 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
       claude: {
         enabled: Boolean(policy.claudeFailoverEnabled),
         'target-model': String(policy.claudeFailoverTargetModel ?? '').trim(),
-        rules
-      }
-    }
+        rules,
+      },
+    },
   };
 }
 
@@ -220,5 +232,5 @@ export const apiKeyPoliciesApi = {
     const key = String(apiKey ?? '').trim();
     if (!key) return;
     await apiClient.delete(`/api-key-policies?api-key=${encodeURIComponent(key)}`);
-  }
+  },
 };
