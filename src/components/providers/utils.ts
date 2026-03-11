@@ -1,5 +1,9 @@
+import type {
+  UsageTargetsCredentialStat,
+  UsageTargetsKeyStat,
+  UsageTargetsOpenAIProviderStat,
+} from '@/services/api';
 import type { AmpcodeConfig, AmpcodeModelMapping, ApiKeyEntry } from '@/types';
-import { buildCandidateUsageSourceIds, type KeyStatBucket, type KeyStats } from '@/utils/usage';
 import type { AmpcodeFormState, ModelEntry } from './types';
 
 export const DISABLE_ALL_MODELS_RULE = '*';
@@ -58,55 +62,50 @@ export const buildOpenAIChatCompletionsEndpoint = (baseUrl: string): string => {
   return `${trimmed}/chat/completions`;
 };
 
-// 根据 source (apiKey) 获取统计数据 - 与旧版逻辑一致
-export const getStatsBySource = (
+export const EMPTY_USAGE_TARGET_STAT: UsageTargetsKeyStat = {
+  success_count: 0,
+  failure_count: 0,
+  status_bar: {
+    blocks: Array.from({ length: 20 }, () => 'idle' as const),
+    success_rate: 100,
+    total_success: 0,
+    total_failure: 0,
+  },
+};
+
+export const findCredentialUsageStat = (
+  stats: UsageTargetsCredentialStat[],
   apiKey: string,
-  keyStats: KeyStats,
   prefix?: string
-): KeyStatBucket => {
-  const bySource = keyStats.bySource ?? {};
-  const candidates = buildCandidateUsageSourceIds({ apiKey, prefix });
-  if (!candidates.length) {
-    return { success: 0, failure: 0 };
-  }
-
-  let success = 0;
-  let failure = 0;
-  candidates.forEach((candidate) => {
-    const stats = bySource[candidate];
-    if (!stats) return;
-    success += stats.success;
-    failure += stats.failure;
-  });
-
-  return { success, failure };
+): UsageTargetsKeyStat => {
+  const targetApiKey = apiKey.trim();
+  const targetPrefix = String(prefix || '').trim();
+  return (
+    stats.find(
+      (item) =>
+        String(item.api_key || '').trim() === targetApiKey &&
+        String(item.prefix || '').trim() === targetPrefix
+    ) || EMPTY_USAGE_TARGET_STAT
+  );
 };
 
-// 对于 OpenAI 提供商，汇总所有 apiKeyEntries 的统计 - 与旧版逻辑一致
-export const getOpenAIProviderStats = (
-  apiKeyEntries: ApiKeyEntry[] | undefined,
-  keyStats: KeyStats,
-  providerPrefix?: string
-): KeyStatBucket => {
-  const bySource = keyStats.bySource ?? {};
+export const findOpenAIProviderUsageStat = (
+  stats: UsageTargetsOpenAIProviderStat[],
+  input: { name: string; prefix?: string; baseUrl?: string }
+): UsageTargetsOpenAIProviderStat | null =>
+  stats.find(
+    (item) =>
+      item.name === input.name &&
+      String(item.prefix || '').trim() === String(input.prefix || '').trim() &&
+      String(item.base_url || '').trim() === String(input.baseUrl || '').trim()
+  ) || null;
 
-  const sourceIds = new Set<string>();
-  buildCandidateUsageSourceIds({ prefix: providerPrefix }).forEach((id) => sourceIds.add(id));
-  (apiKeyEntries || []).forEach((entry) => {
-    buildCandidateUsageSourceIds({ apiKey: entry?.apiKey }).forEach((id) => sourceIds.add(id));
-  });
-
-  let success = 0;
-  let failure = 0;
-  sourceIds.forEach((id) => {
-    const stats = bySource[id];
-    if (!stats) return;
-    success += stats.success;
-    failure += stats.failure;
-  });
-
-  return { success, failure };
-};
+export const findOpenAIEntryUsageStat = (
+  stats: UsageTargetsCredentialStat[] | undefined,
+  apiKey: string
+): UsageTargetsKeyStat =>
+  stats?.find((item) => String(item.api_key || '').trim() === apiKey.trim()) ||
+  EMPTY_USAGE_TARGET_STAT;
 
 export const buildApiKeyEntry = (input?: Partial<ApiKeyEntry>): ApiKeyEntry => ({
   apiKey: input?.apiKey ?? '',

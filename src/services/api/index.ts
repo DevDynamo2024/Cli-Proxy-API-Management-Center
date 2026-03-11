@@ -12,5 +12,6 @@ export * from './usage';
 export * from './logs';
 export * from './version';
 export * from './models';
+export * from './modelPrices';
 export * from './transformers';
 export * from './vertex';

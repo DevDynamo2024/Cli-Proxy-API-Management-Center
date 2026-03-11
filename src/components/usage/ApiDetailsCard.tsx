@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { formatTokensInMillions, formatUsd, type ApiStats } from '@/utils/usage';
+import type { UsageDashboardApiStat } from '@/services/api/usage';
+import { formatTokensInMillions, formatUsd } from '@/utils/usage';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface ApiDetailsCardProps {
-  apiStats: ApiStats[];
+  apiStats: UsageDashboardApiStat[];
   loading: boolean;
-  hasPrices: boolean;
 }
 
-export function ApiDetailsCard({ apiStats, loading, hasPrices }: ApiDetailsCardProps) {
+export function ApiDetailsCard({ apiStats, loading }: ApiDetailsCardProps) {
   const { t } = useTranslation();
   const [expandedApis, setExpandedApis] = useState<Set<string>>(new Set());
 
@@ -41,20 +41,20 @@ export function ApiDetailsCard({ apiStats, loading, hasPrices }: ApiDetailsCardP
                     <span className={styles.apiBadge}>
                       <span className={styles.requestCountCell}>
                         <span>
-                          {t('usage_stats.requests_count')}: {api.totalRequests.toLocaleString()}
+                          {t('usage_stats.requests_count')}: {api.total_requests.toLocaleString()}
                         </span>
                         <span className={styles.requestBreakdown}>
-                          (<span className={styles.statSuccess}>{api.successCount.toLocaleString()}</span>{' '}
-                          <span className={styles.statFailure}>{api.failureCount.toLocaleString()}</span>)
+                          (<span className={styles.statSuccess}>{api.success_count.toLocaleString()}</span>{' '}
+                          <span className={styles.statFailure}>{api.failure_count.toLocaleString()}</span>)
                         </span>
                       </span>
                     </span>
                     <span className={styles.apiBadge}>
-                      {t('usage_stats.tokens_count')}: {formatTokensInMillions(api.totalTokens)}
+                      {t('usage_stats.tokens_count')}: {formatTokensInMillions(api.total_tokens)}
                     </span>
-                    {hasPrices && api.totalCost > 0 && (
+                    {api.total_cost_usd > 0 && (
                       <span className={styles.apiBadge}>
-                        {t('usage_stats.total_cost')}: {formatUsd(api.totalCost)}
+                        {t('usage_stats.total_cost')}: {formatUsd(api.total_cost_usd)}
                       </span>
                     )}
                   </div>
@@ -65,15 +65,15 @@ export function ApiDetailsCard({ apiStats, loading, hasPrices }: ApiDetailsCardP
               </div>
               {expandedApis.has(api.endpoint) && (
                 <div className={styles.apiModels}>
-                  {Object.entries(api.models).map(([model, stats]) => (
-                    <div key={model} className={styles.modelRow}>
-                      <span className={styles.modelName}>{model}</span>
+                  {api.models.map((stats) => (
+                    <div key={stats.model} className={styles.modelRow}>
+                      <span className={styles.modelName}>{stats.model}</span>
                       <span className={styles.modelStat}>
                         <span className={styles.requestCountCell}>
                           <span>{stats.requests.toLocaleString()}</span>
                           <span className={styles.requestBreakdown}>
-                            (<span className={styles.statSuccess}>{stats.successCount.toLocaleString()}</span>{' '}
-                            <span className={styles.statFailure}>{stats.failureCount.toLocaleString()}</span>)
+                            (<span className={styles.statSuccess}>{stats.success_count.toLocaleString()}</span>{' '}
+                            <span className={styles.statFailure}>{stats.failure_count.toLocaleString()}</span>)
                           </span>
                         </span>
                       </span>

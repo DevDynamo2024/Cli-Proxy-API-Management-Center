@@ -1,23 +1,31 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotificationStore } from '@/stores';
-import { usageApi } from '@/services/api/usage';
-import { loadModelPrices, saveModelPrices, type ModelPrice } from '@/utils/usage';
+import { usageApi, type UsageDashboardResponse } from '@/services/api/usage';
+import { modelPricesApi, type ModelPriceApiItem } from '@/services/api/modelPrices';
+import { loadModelPrices, type ModelPrice, type UsageTimeRange } from '@/utils/usage';
 
-export interface UsagePayload {
-  total_requests?: number;
-  success_count?: number;
-  failure_count?: number;
-  total_tokens?: number;
-  apis?: Record<string, unknown>;
-  [key: string]: unknown;
-}
+const normalizePriceItem = (item: ModelPriceApiItem): ModelPrice => ({
+  prompt:
+    Number.isFinite(Number(item.prompt_usd_per_1m)) && Number(item.prompt_usd_per_1m) >= 0
+      ? Number(item.prompt_usd_per_1m)
+      : 0,
+  completion:
+    Number.isFinite(Number(item.completion_usd_per_1m)) && Number(item.completion_usd_per_1m) >= 0
+      ? Number(item.completion_usd_per_1m)
+      : 0,
+  cache:
+    Number.isFinite(Number(item.cached_usd_per_1m)) && Number(item.cached_usd_per_1m) >= 0
+      ? Number(item.cached_usd_per_1m)
+      : 0
+});
 
 export interface UseUsageDataReturn {
-  usage: UsagePayload | null;
+  dashboard: UsageDashboardResponse | null;
   loading: boolean;
   error: string;
   modelPrices: Record<string, ModelPrice>;
+  savedModelPrices: Record<string, ModelPrice>;
   setModelPrices: (prices: Record<string, ModelPrice>) => void;
   loadUsage: () => Promise<void>;
   handleExport: () => Promise<void>;
@@ -28,37 +36,104 @@ export interface UseUsageDataReturn {
   importing: boolean;
 }
 
-export function useUsageData(): UseUsageDataReturn {
+export function useUsageData(range: UsageTimeRange): UseUsageDataReturn {
   const { t } = useTranslation();
   const { showNotification } = useNotificationStore();
 
-  const [usage, setUsage] = useState<UsagePayload | null>(null);
+  const [dashboard, setDashboard] = useState<UsageDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modelPrices, setModelPrices] = useState<Record<string, ModelPrice>>({});
+  const [savedModelPrices, setSavedModelPrices] = useState<Record<string, ModelPrice>>({});
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const savedModelPricesRef = useRef<Record<string, ModelPrice>>({});
 
-  const loadUsage = useCallback(async () => {
+  const applyModelPrices = useCallback((items: ModelPriceApiItem[] | undefined) => {
+    const effective: Record<string, ModelPrice> = {};
+    const saved: Record<string, ModelPrice> = {};
+
+    (items || []).forEach((item) => {
+      if (!item?.model) return;
+      const normalized = normalizePriceItem(item);
+      effective[item.model] = normalized;
+      if (item.source === 'saved') {
+        saved[item.model] = normalized;
+      }
+    });
+
+    setModelPrices(effective);
+    setSavedModelPrices(saved);
+    savedModelPricesRef.current = saved;
+  }, []);
+
+  const loadModelPricesFromServer = useCallback(async () => {
+    const response = await modelPricesApi.getModelPrices();
+    const items = Array.isArray(response?.prices) ? response.prices : [];
+    applyModelPrices(items);
+    return items;
+  }, [applyModelPrices]);
+
+  const migrateLegacyModelPrices = useCallback(async () => {
+    const legacyPrices = loadModelPrices();
+    const entries = Object.entries(legacyPrices);
+    if (!entries.length) return false;
+
+    await Promise.all(
+      entries.map(([model, price]) =>
+        modelPricesApi.putModelPrice({
+          model,
+          prompt_usd_per_1m: price.prompt,
+          completion_usd_per_1m: price.completion,
+          cached_usd_per_1m: price.cache
+        })
+      )
+    );
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('cli-proxy-model-prices-v2');
+    }
+    return true;
+  }, []);
+
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await usageApi.getUsage();
-      const payload = (data?.usage ?? data) as unknown;
-      setUsage(payload && typeof payload === 'object' ? (payload as UsagePayload) : null);
+      const data = await usageApi.getDashboard(range);
+      setDashboard(data ?? null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('usage_stats.loading_error');
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [range, t]);
+
+  const loadUsage = useCallback(async () => {
+    await Promise.all([loadDashboard(), loadModelPricesFromServer()]);
+  }, [loadDashboard, loadModelPricesFromServer]);
 
   useEffect(() => {
-    loadUsage();
-    setModelPrices(loadModelPrices());
-  }, [loadUsage]);
+    const initialize = async () => {
+      try {
+        await loadModelPricesFromServer();
+        const migrated = await migrateLegacyModelPrices();
+        if (migrated) {
+          await loadModelPricesFromServer();
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : t('usage_stats.loading_error');
+        showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
+      }
+    };
+    void initialize();
+  }, [loadModelPricesFromServer, migrateLegacyModelPrices, showNotification, t]);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -119,7 +194,7 @@ export function useUsageData(): UseUsageDataReturn {
         }),
         'success'
       );
-      await loadUsage();
+      await loadDashboard();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       showNotification(
@@ -131,16 +206,69 @@ export function useUsageData(): UseUsageDataReturn {
     }
   };
 
-  const handleSetModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
-    setModelPrices(prices);
-    saveModelPrices(prices);
-  }, []);
+  const handleSetModelPrices = useCallback(
+    (prices: Record<string, ModelPrice>) => {
+      const current = savedModelPricesRef.current;
+      const deletedModels = Object.keys(current).filter((model) => !(model in prices));
+      const upsertEntries = Object.entries(prices).filter(([model, nextPrice]) => {
+        const currentPrice = current[model];
+        return (
+          !currentPrice ||
+          currentPrice.prompt !== nextPrice.prompt ||
+          currentPrice.completion !== nextPrice.completion ||
+          currentPrice.cache !== nextPrice.cache
+        );
+      });
+
+      setSavedModelPrices(prices);
+      savedModelPricesRef.current = prices;
+      setModelPrices((prev) => ({
+        ...prev,
+        ...prices
+      }));
+      deletedModels.forEach((model) => {
+        setModelPrices((prev) => {
+          const next = { ...prev };
+          delete next[model];
+          return next;
+        });
+      });
+
+      void (async () => {
+        try {
+          await Promise.all(
+            deletedModels.map((model) => modelPricesApi.deleteModelPrice(model))
+          );
+          await Promise.all(
+            upsertEntries.map(([model, price]) =>
+              modelPricesApi.putModelPrice({
+                model,
+                prompt_usd_per_1m: price.prompt,
+                completion_usd_per_1m: price.completion,
+                cached_usd_per_1m: price.cache
+              })
+            )
+          );
+          await loadModelPricesFromServer();
+          await loadDashboard();
+          showNotification(t('usage_stats.model_price_saved'), 'success');
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : t('notification.update_failed');
+          showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
+          await loadModelPricesFromServer();
+          await loadDashboard();
+        }
+      })();
+    },
+    [loadDashboard, loadModelPricesFromServer, showNotification, t]
+  );
 
   return {
-    usage,
+    dashboard,
     loading,
     error,
     modelPrices,
+    savedModelPrices,
     setModelPrices: handleSetModelPrices,
     loadUsage,
     handleExport,

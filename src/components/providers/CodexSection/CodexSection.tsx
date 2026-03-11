@@ -1,27 +1,21 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import iconCodexLight from '@/assets/icons/codex_light.svg';
 import iconCodexDark from '@/assets/icons/codex_drak.svg';
+import type { UsageTargetsCredentialStat } from '@/services/api';
 import type { ProviderKeyConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
-import {
-  buildCandidateUsageSourceIds,
-  calculateStatusBarData,
-  type KeyStats,
-  type UsageDetail,
-} from '@/utils/usage';
 import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getStatsBySource, hasDisableAllModelsRule } from '../utils';
+import { findCredentialUsageStat, hasDisableAllModelsRule } from '../utils';
 
 interface CodexSectionProps {
   configs: ProviderKeyConfig[];
-  keyStats: KeyStats;
-  usageDetails: UsageDetail[];
+  stats: UsageTargetsCredentialStat[];
   loading: boolean;
   disableControls: boolean;
   isSwitching: boolean;
@@ -34,8 +28,7 @@ interface CodexSectionProps {
 
 export function CodexSection({
   configs,
-  keyStats,
-  usageDetails,
+  stats,
   loading,
   disableControls,
   isSwitching,
@@ -48,24 +41,6 @@ export function CodexSection({
   const { t } = useTranslation();
   const actionsDisabled = disableControls || loading || isSwitching;
   const toggleDisabled = disableControls || loading || isSwitching;
-
-  const statusBarCache = useMemo(() => {
-    const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
-
-    configs.forEach((config) => {
-      if (!config.apiKey) return;
-      const candidates = buildCandidateUsageSourceIds({
-        apiKey: config.apiKey,
-        prefix: config.prefix,
-      });
-      if (!candidates.length) return;
-      const candidateSet = new Set(candidates);
-      const filteredDetails = usageDetails.filter((detail) => candidateSet.has(detail.source));
-      cache.set(config.apiKey, calculateStatusBarData(filteredDetails));
-    });
-
-    return cache;
-  }, [configs, usageDetails]);
 
   return (
     <>
@@ -105,11 +80,10 @@ export function CodexSection({
             />
           )}
           renderContent={(item) => {
-            const stats = getStatsBySource(item.apiKey, keyStats, item.prefix);
+            const usageStat = findCredentialUsageStat(stats, item.apiKey, item.prefix);
             const headerEntries = Object.entries(item.headers || {});
             const configDisabled = hasDisableAllModelsRule(item.excludedModels);
             const excludedModels = item.excludedModels ?? [];
-            const statusData = statusBarCache.get(item.apiKey) || calculateStatusBarData([]);
 
             return (
               <Fragment>
@@ -166,13 +140,13 @@ export function CodexSection({
                 ) : null}
                 <div className={styles.cardStats}>
                   <span className={`${styles.statPill} ${styles.statSuccess}`}>
-                    {t('stats.success')}: {stats.success}
+                    {t('stats.success')}: {usageStat.success_count}
                   </span>
                   <span className={`${styles.statPill} ${styles.statFailure}`}>
-                    {t('stats.failure')}: {stats.failure}
+                    {t('stats.failure')}: {usageStat.failure_count}
                   </span>
                 </div>
-                <ProviderStatusBar statusData={statusData} />
+                <ProviderStatusBar statusData={usageStat.status_bar} />
               </Fragment>
             );
           }}

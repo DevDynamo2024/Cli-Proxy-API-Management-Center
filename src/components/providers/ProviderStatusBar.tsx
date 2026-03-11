@@ -1,17 +1,17 @@
-import { calculateStatusBarData } from '@/utils/usage';
+import type { UsageTargetsStatusBar } from '@/services/api';
 import styles from '@/pages/AiProvidersPage.module.scss';
 
 interface ProviderStatusBarProps {
-  statusData: ReturnType<typeof calculateStatusBarData>;
+  statusData: UsageTargetsStatusBar;
 }
 
 export function ProviderStatusBar({ statusData }: ProviderStatusBarProps) {
-  const hasData = statusData.totalSuccess + statusData.totalFailure > 0;
+  const hasData = statusData.total_success + statusData.total_failure > 0;
   const rateClass = !hasData
     ? ''
-    : statusData.successRate >= 90
+    : statusData.success_rate >= 90
       ? styles.statusRateHigh
-      : statusData.successRate >= 50
+      : statusData.success_rate >= 50
         ? styles.statusRateMedium
         : styles.statusRateLow;
 
@@ -31,7 +31,7 @@ export function ProviderStatusBar({ statusData }: ProviderStatusBarProps) {
         })}
       </div>
       <span className={`${styles.statusRate} ${rateClass}`}>
-        {hasData ? `${statusData.successRate.toFixed(1)}%` : '--'}
+        {hasData ? `${statusData.success_rate.toFixed(1)}%` : '--'}
       </span>
     </div>
   );

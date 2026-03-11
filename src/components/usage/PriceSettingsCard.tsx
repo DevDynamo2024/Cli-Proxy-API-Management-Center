@@ -9,12 +9,14 @@ import styles from '@/pages/UsagePage.module.scss';
 export interface PriceSettingsCardProps {
   modelNames: string[];
   modelPrices: Record<string, ModelPrice>;
+  savedModelPrices: Record<string, ModelPrice>;
   onPricesChange: (prices: Record<string, ModelPrice>) => void;
 }
 
 export function PriceSettingsCard({
   modelNames,
   modelPrices,
+  savedModelPrices,
   onPricesChange
 }: PriceSettingsCardProps) {
   const { t } = useTranslation();
@@ -29,7 +31,7 @@ export function PriceSettingsCard({
     const prompt = parseFloat(promptPrice) || 0;
     const completion = parseFloat(completionPrice) || 0;
     const cache = cachePrice.trim() === '' ? prompt : parseFloat(cachePrice) || 0;
-    const newPrices = { ...modelPrices, [selectedModel]: { prompt, completion, cache } };
+    const newPrices = { ...savedModelPrices, [selectedModel]: { prompt, completion, cache } };
     onPricesChange(newPrices);
     setSelectedModel('');
     setPromptPrice('');
@@ -38,13 +40,13 @@ export function PriceSettingsCard({
   };
 
   const handleDeletePrice = (model: string) => {
-    const newPrices = { ...modelPrices };
+    const newPrices = { ...savedModelPrices };
     delete newPrices[model];
     onPricesChange(newPrices);
   };
 
   const handleEditPrice = (model: string) => {
-    const price = modelPrices[model];
+    const price = savedModelPrices[model] || modelPrices[model];
     setSelectedModel(model);
     setPromptPrice(price?.prompt?.toString() || '');
     setCompletionPrice(price?.completion?.toString() || '');
@@ -125,9 +127,9 @@ export function PriceSettingsCard({
         {/* Saved Prices List */}
         <div className={styles.pricesList}>
           <h4 className={styles.pricesTitle}>{t('usage_stats.saved_prices')}</h4>
-          {Object.keys(modelPrices).length > 0 ? (
+          {Object.keys(savedModelPrices).length > 0 ? (
             <div className={styles.pricesGrid}>
-              {Object.entries(modelPrices).map(([model, price]) => (
+              {Object.entries(savedModelPrices).map(([model, price]) => (
                 <div key={model} className={styles.priceItem}>
                   <div className={styles.priceInfo}>
                     <span className={styles.priceModel}>{model}</span>

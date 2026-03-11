@@ -1,6 +1,6 @@
 // Hooks
 export { useUsageData } from './hooks/useUsageData';
-export type { UsagePayload, UseUsageDataReturn } from './hooks/useUsageData';
+export type { UseUsageDataReturn } from './hooks/useUsageData';
 
 export { useSparklines } from './hooks/useSparklines';
 export type { SparklineData, SparklineBundle, UseSparklinesOptions, UseSparklinesReturn } from './hooks/useSparklines';
@@ -22,7 +22,7 @@ export { ApiDetailsCard } from './ApiDetailsCard';
 export type { ApiDetailsCardProps } from './ApiDetailsCard';
 
 export { ModelStatsCard } from './ModelStatsCard';
-export type { ModelStatsCardProps, ModelStat } from './ModelStatsCard';
+export type { ModelStatsCardProps } from './ModelStatsCard';
 
 export { PriceSettingsCard } from './PriceSettingsCard';
 export type { PriceSettingsCardProps } from './PriceSettingsCard';

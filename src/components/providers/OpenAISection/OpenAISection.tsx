@@ -1,27 +1,25 @@
-import { Fragment, useMemo } from 'react';
+import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { IconCheck, IconX } from '@/components/ui/icons';
 import iconOpenaiLight from '@/assets/icons/openai-light.svg';
 import iconOpenaiDark from '@/assets/icons/openai-dark.svg';
+import type { UsageTargetsOpenAIProviderStat } from '@/services/api';
 import type { OpenAIProviderConfig } from '@/types';
 import { maskApiKey } from '@/utils/format';
-import {
-  buildCandidateUsageSourceIds,
-  calculateStatusBarData,
-  type KeyStats,
-  type UsageDetail,
-} from '@/utils/usage';
 import styles from '@/pages/AiProvidersPage.module.scss';
 import { ProviderList } from '../ProviderList';
 import { ProviderStatusBar } from '../ProviderStatusBar';
-import { getOpenAIProviderStats, getStatsBySource } from '../utils';
+import {
+  EMPTY_USAGE_TARGET_STAT,
+  findOpenAIEntryUsageStat,
+  findOpenAIProviderUsageStat,
+} from '../utils';
 
 interface OpenAISectionProps {
   configs: OpenAIProviderConfig[];
-  keyStats: KeyStats;
-  usageDetails: UsageDetail[];
+  stats: UsageTargetsOpenAIProviderStat[];
   loading: boolean;
   disableControls: boolean;
   isSwitching: boolean;
@@ -33,8 +31,7 @@ interface OpenAISectionProps {
 
 export function OpenAISection({
   configs,
-  keyStats,
-  usageDetails,
+  stats,
   loading,
   disableControls,
   isSwitching,
@@ -45,25 +42,6 @@ export function OpenAISection({
 }: OpenAISectionProps) {
   const { t } = useTranslation();
   const actionsDisabled = disableControls || loading || isSwitching;
-
-  const statusBarCache = useMemo(() => {
-    const cache = new Map<string, ReturnType<typeof calculateStatusBarData>>();
-
-    configs.forEach((provider) => {
-      const sourceIds = new Set<string>();
-      buildCandidateUsageSourceIds({ prefix: provider.prefix }).forEach((id) => sourceIds.add(id));
-      (provider.apiKeyEntries || []).forEach((entry) => {
-        buildCandidateUsageSourceIds({ apiKey: entry.apiKey }).forEach((id) => sourceIds.add(id));
-      });
-
-      const filteredDetails = sourceIds.size
-        ? usageDetails.filter((detail) => sourceIds.has(detail.source))
-        : [];
-      cache.set(provider.name, calculateStatusBarData(filteredDetails));
-    });
-
-    return cache;
-  }, [configs, usageDetails]);
 
   return (
     <>
@@ -94,10 +72,14 @@ export function OpenAISection({
           onDelete={onDelete}
           actionsDisabled={actionsDisabled}
           renderContent={(item) => {
-            const stats = getOpenAIProviderStats(item.apiKeyEntries, keyStats, item.prefix);
+            const providerStat =
+              findOpenAIProviderUsageStat(stats, {
+                name: item.name,
+                prefix: item.prefix,
+                baseUrl: item.baseUrl,
+              }) || null;
             const headerEntries = Object.entries(item.headers || {});
             const apiKeyEntries = item.apiKeyEntries || [];
-            const statusData = statusBarCache.get(item.name) || calculateStatusBarData([]);
 
             return (
               <Fragment>
@@ -128,7 +110,10 @@ export function OpenAISection({
                     </div>
                     <div className={styles.apiKeyEntryList}>
                       {apiKeyEntries.map((entry, entryIndex) => {
-                        const entryStats = getStatsBySource(entry.apiKey, keyStats);
+                        const entryStats = findOpenAIEntryUsageStat(
+                          providerStat?.api_key_entries,
+                          entry.apiKey
+                        );
                         return (
                           <div key={entryIndex} className={styles.apiKeyEntryCard}>
                             <span className={styles.apiKeyEntryIndex}>{entryIndex + 1}</span>
@@ -140,12 +125,12 @@ export function OpenAISection({
                               <span
                                 className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatSuccess}`}
                               >
-                                <IconCheck size={12} /> {entryStats.success}
+                                <IconCheck size={12} /> {entryStats.success_count}
                               </span>
                               <span
                                 className={`${styles.apiKeyEntryStat} ${styles.apiKeyEntryStatFailure}`}
                               >
-                                <IconX size={12} /> {entryStats.failure}
+                                <IconX size={12} /> {entryStats.failure_count}
                               </span>
                             </div>
                           </div>
@@ -178,13 +163,15 @@ export function OpenAISection({
                 )}
                 <div className={styles.cardStats}>
                   <span className={`${styles.statPill} ${styles.statSuccess}`}>
-                    {t('stats.success')}: {stats.success}
+                    {t('stats.success')}: {providerStat?.success_count ?? 0}
                   </span>
                   <span className={`${styles.statPill} ${styles.statFailure}`}>
-                    {t('stats.failure')}: {stats.failure}
+                    {t('stats.failure')}: {providerStat?.failure_count ?? 0}
                   </span>
                 </div>
-                <ProviderStatusBar statusData={statusData} />
+                <ProviderStatusBar
+                  statusData={providerStat?.status_bar ?? EMPTY_USAGE_TARGET_STAT.status_bar}
+                />
               </Fragment>
             );
           }}

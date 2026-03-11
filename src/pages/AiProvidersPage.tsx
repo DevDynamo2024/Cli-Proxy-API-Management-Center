@@ -58,7 +58,7 @@ export function AiProvidersPage() {
   const disableControls = connectionStatus !== 'connected';
   const isSwitching = Boolean(configSwitchingKey);
 
-  const { keyStats, usageDetails, loadKeyStats } = useProviderStats();
+  const { stats, loadKeyStats } = useProviderStats();
 
   const getErrorMessage = (err: unknown) => {
     if (err instanceof Error) return err.message;
@@ -343,8 +343,7 @@ export function AiProvidersPage() {
         <div id="provider-gemini">
           <GeminiSection
             configs={geminiKeys}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
+            stats={stats.providers.gemini}
             loading={loading}
             disableControls={disableControls}
             isSwitching={isSwitching}
@@ -358,8 +357,7 @@ export function AiProvidersPage() {
         <div id="provider-codex">
           <CodexSection
             configs={codexConfigs}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
+            stats={stats.providers.codex}
             loading={loading}
             disableControls={disableControls}
             isSwitching={isSwitching}
@@ -374,8 +372,7 @@ export function AiProvidersPage() {
         <div id="provider-claude">
           <ClaudeSection
             configs={claudeConfigs}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
+            stats={stats.providers.claude}
             loading={loading}
             disableControls={disableControls}
             isSwitching={isSwitching}
@@ -389,8 +386,7 @@ export function AiProvidersPage() {
         <div id="provider-vertex">
           <VertexSection
             configs={vertexConfigs}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
+            stats={stats.providers.vertex}
             loading={loading}
             disableControls={disableControls}
             isSwitching={isSwitching}
@@ -413,8 +409,7 @@ export function AiProvidersPage() {
         <div id="provider-openai">
           <OpenAISection
             configs={openaiProviders}
-            keyStats={keyStats}
-            usageDetails={usageDetails}
+            stats={stats.providers.openai}
             loading={loading}
             disableControls={disableControls}
             isSwitching={isSwitching}

@@ -1,24 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
+import type { UsageDashboardModelStat } from '@/services/api/usage';
 import { formatTokensInMillions, formatUsd } from '@/utils/usage';
 import styles from '@/pages/UsagePage.module.scss';
 
-export interface ModelStat {
-  model: string;
-  requests: number;
-  successCount: number;
-  failureCount: number;
-  tokens: number;
-  cost: number;
-}
-
 export interface ModelStatsCardProps {
-  modelStats: ModelStat[];
+  modelStats: UsageDashboardModelStat[];
   loading: boolean;
-  hasPrices: boolean;
 }
 
-export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCardProps) {
+export function ModelStatsCard({ modelStats, loading }: ModelStatsCardProps) {
   const { t } = useTranslation();
 
   return (
@@ -33,7 +24,7 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                 <th>{t('usage_stats.model_name')}</th>
                 <th>{t('usage_stats.requests_count')}</th>
                 <th>{t('usage_stats.tokens_count')}</th>
-                {hasPrices && <th>{t('usage_stats.total_cost')}</th>}
+                <th>{t('usage_stats.total_cost')}</th>
               </tr>
             </thead>
             <tbody>
@@ -44,13 +35,13 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                     <span className={styles.requestCountCell}>
                       <span>{stat.requests.toLocaleString()}</span>
                       <span className={styles.requestBreakdown}>
-                        (<span className={styles.statSuccess}>{stat.successCount.toLocaleString()}</span>{' '}
-                        <span className={styles.statFailure}>{stat.failureCount.toLocaleString()}</span>)
+                        (<span className={styles.statSuccess}>{stat.success_count.toLocaleString()}</span>{' '}
+                        <span className={styles.statFailure}>{stat.failure_count.toLocaleString()}</span>)
                       </span>
                     </span>
                   </td>
                   <td>{formatTokensInMillions(stat.tokens)}</td>
-                  {hasPrices && <td>{stat.cost > 0 ? formatUsd(stat.cost) : '--'}</td>}
+                  <td>{stat.cost_usd > 0 ? formatUsd(stat.cost_usd) : '--'}</td>
                 </tr>
               ))}
             </tbody>

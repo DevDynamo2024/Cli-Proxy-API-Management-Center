@@ -39,6 +39,9 @@ export interface UsageDetail {
   timestamp: string;
   source: string;
   auth_index: number;
+  request_count?: number;
+  success_count?: number;
+  failure_count?: number;
   tokens: {
     input_tokens: number;
     output_tokens: number;
@@ -101,8 +104,31 @@ const toUsageSummaryFields = (summary: UsageSummary) => ({
   total_tokens: summary.totalTokens
 });
 
-const isDetailWithinWindow = (detail: unknown, windowStart: number, nowMs: number): detail is Record<string, unknown> => {
+const isAggregatedUsageDetail = (detail: unknown): boolean => {
+  const record = isRecord(detail) ? detail : null;
+  if (!record) {
+    return false;
+  }
+  const requestCount = Number(record.request_count);
+  const successCount = Number(record.success_count);
+  const failureCount = Number(record.failure_count);
+  return (
+    (Number.isFinite(requestCount) && requestCount > 1) ||
+    (Number.isFinite(successCount) && successCount > 0) ||
+    (Number.isFinite(failureCount) && failureCount > 0)
+  );
+};
+
+const isDetailWithinWindow = (
+  detail: unknown,
+  windowStart: number,
+  nowMs: number,
+  allowAggregated: boolean
+): detail is Record<string, unknown> => {
   if (!isRecord(detail) || typeof detail.timestamp !== 'string') {
+    return false;
+  }
+  if (!allowAggregated && isAggregatedUsageDetail(detail)) {
     return false;
   }
   const timestamp = Date.parse(detail.timestamp);
@@ -119,12 +145,10 @@ const updateSummaryFromDetails = (summary: UsageSummary, details: unknown[]) => 
       return;
     }
 
-    summary.totalRequests += 1;
-    if (detailRecord.failed === true) {
-      summary.failureCount += 1;
-    } else {
-      summary.successCount += 1;
-    }
+    summary.totalRequests += extractRequestCount(detailRecord);
+    const { successCount, failureCount } = extractOutcomeCounts(detailRecord);
+    summary.successCount += successCount;
+    summary.failureCount += failureCount;
     summary.totalTokens += extractTotalTokens(detailRecord);
   });
 };
@@ -146,6 +170,7 @@ export function filterUsageByTimeRange<T>(usageData: T, range: UsageTimeRange, n
   }
 
   const windowStart = nowMs - rangeMs;
+  const allowAggregated = range === '7d';
   const filteredApis: Record<string, unknown> = {};
   const totalSummary = createUsageSummary();
 
@@ -169,7 +194,7 @@ export function filterUsageByTimeRange<T>(usageData: T, range: UsageTimeRange, n
 
       const detailsRaw = Array.isArray(modelEntry.details) ? modelEntry.details : [];
       const filteredDetails = detailsRaw.filter((detail) =>
-        isDetailWithinWindow(detail, windowStart, nowMs)
+        isDetailWithinWindow(detail, windowStart, nowMs, allowAggregated)
       );
 
       if (!filteredDetails.length) {
@@ -506,6 +531,35 @@ export function extractTotalTokens(detail: unknown): number {
   return inputTokens + outputTokens + reasoningTokens + cachedTokens;
 }
 
+export function extractRequestCount(detail: unknown): number {
+  const record = isRecord(detail) ? detail : null;
+  const requestCount = Number(record?.request_count);
+  if (Number.isFinite(requestCount) && requestCount > 0) {
+    return requestCount;
+  }
+  return 1;
+}
+
+export function extractOutcomeCounts(detail: unknown): { successCount: number; failureCount: number } {
+  const record = isRecord(detail) ? detail : null;
+  const successCount = Number(record?.success_count);
+  const failureCount = Number(record?.failure_count);
+
+  if (
+    (Number.isFinite(successCount) && successCount > 0) ||
+    (Number.isFinite(failureCount) && failureCount > 0)
+  ) {
+    return {
+      successCount: Number.isFinite(successCount) && successCount > 0 ? successCount : 0,
+      failureCount: Number.isFinite(failureCount) && failureCount > 0 ? failureCount : 0
+    };
+  }
+
+  return record?.failed === true
+    ? { successCount: 0, failureCount: extractRequestCount(record) }
+    : { successCount: extractRequestCount(record), failureCount: 0 };
+}
+
 /**
  * 计算 token 分类统计
  */
@@ -556,7 +610,7 @@ export function calculateRecentPerMinuteRates(
     if (Number.isNaN(timestamp) || timestamp < windowStart) {
       return;
     }
-    requestCount += 1;
+    requestCount += extractRequestCount(detail);
     tokenCount += extractTotalTokens(detail);
   });
 
@@ -938,7 +992,7 @@ export function buildHourlySeriesByModel(
     if (metric === 'tokens') {
       bucketValues[bucketIndex] += extractTotalTokens(detail);
     } else {
-      bucketValues[bucketIndex] += 1;
+      bucketValues[bucketIndex] += extractRequestCount(detail);
     }
     hasData = true;
   });
@@ -981,7 +1035,7 @@ export function buildDailySeriesByModel(
       valuesByModel.set(modelName, new Map());
     }
     const modelDayMap = valuesByModel.get(modelName)!;
-    const increment = metric === 'tokens' ? extractTotalTokens(detail) : 1;
+    const increment = metric === 'tokens' ? extractTotalTokens(detail) : extractRequestCount(detail);
     modelDayMap.set(dayLabel, (modelDayMap.get(dayLabel) || 0) + increment);
     labelsSet.add(dayLabel);
     hasData = true;
@@ -1184,13 +1238,11 @@ export function calculateStatusBarData(
     const blockIndex = BLOCK_COUNT - 1 - Math.floor(ageMs / BLOCK_DURATION_MS);
 
     if (blockIndex >= 0 && blockIndex < BLOCK_COUNT) {
-      if (detail.failed) {
-        blockStats[blockIndex].failure += 1;
-        totalFailure += 1;
-      } else {
-        blockStats[blockIndex].success += 1;
-        totalSuccess += 1;
-      }
+      const { successCount, failureCount } = extractOutcomeCounts(detail);
+      blockStats[blockIndex].success += successCount;
+      blockStats[blockIndex].failure += failureCount;
+      totalSuccess += successCount;
+      totalFailure += failureCount;
     }
   });
 
@@ -1250,24 +1302,18 @@ export function computeKeyStats(usageData: unknown, masker: (val: string) => str
         const detailRecord = isRecord(detail) ? detail : null;
         const source = normalizeUsageSourceId(detailRecord?.source, masker);
         const authIndexKey = normalizeAuthIndex(detailRecord?.auth_index);
-        const isFailed = detailRecord?.failed === true;
+        const { successCount, failureCount } = extractOutcomeCounts(detailRecord);
 
         if (source) {
           const bucket = ensureBucket(sourceStats, source);
-          if (isFailed) {
-            bucket.failure += 1;
-          } else {
-            bucket.success += 1;
-          }
+          bucket.success += successCount;
+          bucket.failure += failureCount;
         }
 
         if (authIndexKey) {
           const bucket = ensureBucket(authIndexStats, authIndexKey);
-          if (isFailed) {
-            bucket.failure += 1;
-          } else {
-            bucket.success += 1;
-          }
+          bucket.success += successCount;
+          bucket.failure += failureCount;
         }
       });
     });

@@ -5,14 +5,13 @@ import { IconDiamond, IconDollarSign, IconSatellite, IconTimer, IconTrendingUp }
 import {
   formatTokensInMillions,
   formatPerMinuteValue,
-  formatUsd,
-  calculateTokenBreakdown,
-  calculateRecentPerMinuteRates,
-  calculateTotalCost,
-  type ModelPrice
+  formatUsd
 } from '@/utils/usage';
 import { sparklineOptions } from '@/utils/usage/chartConfig';
-import type { UsagePayload } from './hooks/useUsageData';
+import type {
+  UsageDashboardRates,
+  UsageDashboardSummary
+} from '@/services/api/usage';
 import type { SparklineBundle } from './hooks/useSparklines';
 import styles from '@/pages/UsagePage.module.scss';
 
@@ -29,9 +28,9 @@ interface StatCardData {
 }
 
 export interface StatCardsProps {
-  usage: UsagePayload | null;
+  summary: UsageDashboardSummary | null;
+  rates: UsageDashboardRates | null;
   loading: boolean;
-  modelPrices: Record<string, ModelPrice>;
   sparklines: {
     requests: SparklineBundle | null;
     tokens: SparklineBundle | null;
@@ -41,15 +40,8 @@ export interface StatCardsProps {
   };
 }
 
-export function StatCards({ usage, loading, modelPrices, sparklines }: StatCardsProps) {
+export function StatCards({ summary, rates, loading, sparklines }: StatCardsProps) {
   const { t } = useTranslation();
-
-  const tokenBreakdown = usage ? calculateTokenBreakdown(usage) : { cachedTokens: 0, reasoningTokens: 0 };
-  const rateStats = usage
-    ? calculateRecentPerMinuteRates(30, usage)
-    : { rpm: 0, tpm: 0, windowMinutes: 30, requestCount: 0, tokenCount: 0 };
-  const totalCost = usage ? calculateTotalCost(usage, modelPrices) : 0;
-  const hasPrices = Object.keys(modelPrices).length > 0;
 
   const statsCards: StatCardData[] = [
     {
@@ -59,16 +51,16 @@ export function StatCards({ usage, loading, modelPrices, sparklines }: StatCards
       accent: '#3b82f6',
       accentSoft: 'rgba(59, 130, 246, 0.18)',
       accentBorder: 'rgba(59, 130, 246, 0.35)',
-      value: loading ? '-' : (usage?.total_requests ?? 0).toLocaleString(),
+      value: loading ? '-' : (summary?.total_requests ?? 0).toLocaleString(),
       meta: (
         <>
           <span className={styles.statMetaItem}>
             <span className={styles.statMetaDot} style={{ backgroundColor: '#10b981' }} />
-            {t('usage_stats.success_requests')}: {loading ? '-' : (usage?.success_count ?? 0)}
+            {t('usage_stats.success_requests')}: {loading ? '-' : (summary?.success_count ?? 0)}
           </span>
           <span className={styles.statMetaItem}>
             <span className={styles.statMetaDot} style={{ backgroundColor: '#ef4444' }} />
-            {t('usage_stats.failed_requests')}: {loading ? '-' : (usage?.failure_count ?? 0)}
+            {t('usage_stats.failed_requests')}: {loading ? '-' : (summary?.failure_count ?? 0)}
           </span>
         </>
       ),
@@ -81,14 +73,14 @@ export function StatCards({ usage, loading, modelPrices, sparklines }: StatCards
       accent: '#8b5cf6',
       accentSoft: 'rgba(139, 92, 246, 0.18)',
       accentBorder: 'rgba(139, 92, 246, 0.35)',
-      value: loading ? '-' : formatTokensInMillions(usage?.total_tokens ?? 0),
+      value: loading ? '-' : formatTokensInMillions(summary?.total_tokens ?? 0),
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.cached_tokens')}: {loading ? '-' : formatTokensInMillions(tokenBreakdown.cachedTokens)}
+            {t('usage_stats.cached_tokens')}: {loading ? '-' : formatTokensInMillions(summary?.cached_tokens ?? 0)}
           </span>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.reasoning_tokens')}: {loading ? '-' : formatTokensInMillions(tokenBreakdown.reasoningTokens)}
+            {t('usage_stats.reasoning_tokens')}: {loading ? '-' : formatTokensInMillions(summary?.reasoning_tokens ?? 0)}
           </span>
         </>
       ),
@@ -101,10 +93,10 @@ export function StatCards({ usage, loading, modelPrices, sparklines }: StatCards
       accent: '#22c55e',
       accentSoft: 'rgba(34, 197, 94, 0.18)',
       accentBorder: 'rgba(34, 197, 94, 0.32)',
-      value: loading ? '-' : formatPerMinuteValue(rateStats.rpm),
+      value: loading ? '-' : formatPerMinuteValue(rates?.rpm ?? 0),
       meta: (
         <span className={styles.statMetaItem}>
-          {t('usage_stats.total_requests')}: {loading ? '-' : rateStats.requestCount.toLocaleString()}
+          {t('usage_stats.total_requests')}: {loading ? '-' : (rates?.request_count ?? 0).toLocaleString()}
         </span>
       ),
       trend: sparklines.rpm
@@ -116,10 +108,10 @@ export function StatCards({ usage, loading, modelPrices, sparklines }: StatCards
       accent: '#f97316',
       accentSoft: 'rgba(249, 115, 22, 0.18)',
       accentBorder: 'rgba(249, 115, 22, 0.32)',
-      value: loading ? '-' : formatPerMinuteValue(rateStats.tpm),
+      value: loading ? '-' : formatPerMinuteValue(rates?.tpm ?? 0),
       meta: (
         <span className={styles.statMetaItem}>
-          {t('usage_stats.total_tokens')}: {loading ? '-' : formatTokensInMillions(rateStats.tokenCount)}
+          {t('usage_stats.total_tokens')}: {loading ? '-' : formatTokensInMillions(rates?.token_count ?? 0)}
         </span>
       ),
       trend: sparklines.tpm
@@ -131,20 +123,15 @@ export function StatCards({ usage, loading, modelPrices, sparklines }: StatCards
       accent: '#f59e0b',
       accentSoft: 'rgba(245, 158, 11, 0.18)',
       accentBorder: 'rgba(245, 158, 11, 0.32)',
-      value: loading ? '-' : hasPrices ? formatUsd(totalCost) : '--',
+      value: loading ? '-' : formatUsd(summary?.total_cost_usd ?? 0),
       meta: (
         <>
           <span className={styles.statMetaItem}>
-            {t('usage_stats.total_tokens')}: {loading ? '-' : formatTokensInMillions(usage?.total_tokens ?? 0)}
+            {t('usage_stats.total_tokens')}: {loading ? '-' : formatTokensInMillions(summary?.total_tokens ?? 0)}
           </span>
-          {!hasPrices && (
-            <span className={`${styles.statMetaItem} ${styles.statSubtle}`}>
-              {t('usage_stats.cost_need_price')}
-            </span>
-          )}
         </>
       ),
-      trend: hasPrices ? sparklines.cost : null
+      trend: sparklines.cost
     }
   ];
 

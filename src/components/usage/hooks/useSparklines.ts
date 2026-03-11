@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { collectUsageDetails, extractTotalTokens } from '@/utils/usage';
-import type { UsagePayload } from './useUsageData';
+import type { UsageDashboardResponse } from '@/services/api/usage';
 
 export interface SparklineData {
   labels: string[];
@@ -22,7 +21,7 @@ export interface SparklineBundle {
 }
 
 export interface UseSparklinesOptions {
-  usage: UsagePayload | null;
+  sparklines: UsageDashboardResponse['sparklines'] | null;
   loading: boolean;
 }
 
@@ -34,41 +33,13 @@ export interface UseSparklinesReturn {
   costSparkline: SparklineBundle | null;
 }
 
-export function useSparklines({ usage, loading }: UseSparklinesOptions): UseSparklinesReturn {
-  const buildLastHourSeries = useCallback(
-    (metric: 'requests' | 'tokens'): { labels: string[]; data: number[] } => {
-      if (!usage) return { labels: [], data: [] };
-      const details = collectUsageDetails(usage);
-      if (!details.length) return { labels: [], data: [] };
-
-      const windowMinutes = 60;
-      const now = Date.now();
-      const windowStart = now - windowMinutes * 60 * 1000;
-      const buckets = new Array(windowMinutes).fill(0);
-
-      details.forEach((detail) => {
-        const timestamp = Date.parse(detail.timestamp);
-        if (Number.isNaN(timestamp) || timestamp < windowStart) {
-          return;
-        }
-        const minuteIndex = Math.min(
-          windowMinutes - 1,
-          Math.floor((timestamp - windowStart) / 60000)
-        );
-        const increment = metric === 'tokens' ? extractTotalTokens(detail) : 1;
-        buckets[minuteIndex] += increment;
-      });
-
-      const labels = buckets.map((_, idx) => {
-        const date = new Date(windowStart + (idx + 1) * 60000);
-        const h = date.getHours().toString().padStart(2, '0');
-        const m = date.getMinutes().toString().padStart(2, '0');
-        return `${h}:${m}`;
-      });
-
-      return { labels, data: buckets };
-    },
-    [usage]
+export function useSparklines({ sparklines, loading }: UseSparklinesOptions): UseSparklinesReturn {
+  const buildSeries = useCallback(
+    (series: { labels?: string[]; data?: number[] } | null | undefined) => ({
+      labels: series?.labels || [],
+      data: series?.data || []
+    }),
+    []
   );
 
   const buildSparkline = useCallback(
@@ -77,7 +48,7 @@ export function useSparklines({ usage, loading }: UseSparklinesOptions): UseSpar
       color: string,
       backgroundColor: string
     ): SparklineBundle | null => {
-      if (loading || !series?.data?.length) {
+      if (loading || !series?.data?.length || series.data.every((value) => value === 0)) {
         return null;
       }
       const sliceStart = Math.max(series.data.length - 60, 0);
@@ -104,28 +75,28 @@ export function useSparklines({ usage, loading }: UseSparklinesOptions): UseSpar
   );
 
   const requestsSparkline = useMemo(
-    () => buildSparkline(buildLastHourSeries('requests'), '#3b82f6', 'rgba(59, 130, 246, 0.18)'),
-    [buildLastHourSeries, buildSparkline]
+    () => buildSparkline(buildSeries(sparklines?.requests), '#3b82f6', 'rgba(59, 130, 246, 0.18)'),
+    [buildSeries, buildSparkline, sparklines?.requests]
   );
 
   const tokensSparkline = useMemo(
-    () => buildSparkline(buildLastHourSeries('tokens'), '#8b5cf6', 'rgba(139, 92, 246, 0.18)'),
-    [buildLastHourSeries, buildSparkline]
+    () => buildSparkline(buildSeries(sparklines?.tokens), '#8b5cf6', 'rgba(139, 92, 246, 0.18)'),
+    [buildSeries, buildSparkline, sparklines?.tokens]
   );
 
   const rpmSparkline = useMemo(
-    () => buildSparkline(buildLastHourSeries('requests'), '#22c55e', 'rgba(34, 197, 94, 0.18)'),
-    [buildLastHourSeries, buildSparkline]
+    () => buildSparkline(buildSeries(sparklines?.rpm), '#22c55e', 'rgba(34, 197, 94, 0.18)'),
+    [buildSeries, buildSparkline, sparklines?.rpm]
   );
 
   const tpmSparkline = useMemo(
-    () => buildSparkline(buildLastHourSeries('tokens'), '#f97316', 'rgba(249, 115, 22, 0.18)'),
-    [buildLastHourSeries, buildSparkline]
+    () => buildSparkline(buildSeries(sparklines?.tpm), '#f97316', 'rgba(249, 115, 22, 0.18)'),
+    [buildSeries, buildSparkline, sparklines?.tpm]
   );
 
   const costSparkline = useMemo(
-    () => buildSparkline(buildLastHourSeries('tokens'), '#f59e0b', 'rgba(245, 158, 11, 0.18)'),
-    [buildLastHourSeries, buildSparkline]
+    () => buildSparkline(buildSeries(sparklines?.cost), '#f59e0b', 'rgba(245, 158, 11, 0.18)'),
+    [buildSeries, buildSparkline, sparklines?.cost]
   );
 
   return {

@@ -29,10 +29,6 @@ import {
   useChartData
 } from '@/components/usage';
 import {
-  getModelNamesFromUsage,
-  getApiStats,
-  getModelStats,
-  filterUsageByTimeRange,
   type UsageTimeRange
 } from '@/utils/usage';
 import styles from './UsagePage.module.scss';
@@ -54,11 +50,6 @@ const TIME_RANGE_STORAGE_KEY = 'cli-proxy-usage-time-range-v1';
 const DEFAULT_CHART_LINES = ['all'];
 const DEFAULT_TIME_RANGE: UsageTimeRange = '24h';
 const MAX_CHART_LINES = 9;
-const HOUR_WINDOW_BY_TIME_RANGE: Record<Exclude<UsageTimeRange, 'all'>, number> = {
-  '7h': 7,
-  '24h': 24,
-  '7d': 7 * 24
-};
 
 const isUsageTimeRange = (value: unknown): value is UsageTimeRange =>
   value === '7h' || value === '24h' || value === '7d' || value === 'all';
@@ -109,13 +100,16 @@ export function UsagePage() {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const isDark = resolvedTheme === 'dark';
+  const [chartLines, setChartLines] = useState<string[]>(loadChartLines);
+  const [timeRange, setTimeRange] = useState<UsageTimeRange>(loadTimeRange);
 
   // Data hook
   const {
-    usage,
+    dashboard,
     loading,
     error,
     modelPrices,
+    savedModelPrices,
     setModelPrices,
     loadUsage,
     handleExport,
@@ -124,20 +118,9 @@ export function UsagePage() {
     importInputRef,
     exporting,
     importing
-  } = useUsageData();
+  } = useUsageData(timeRange);
 
   useHeaderRefresh(loadUsage);
-
-  // Chart lines state
-  const [chartLines, setChartLines] = useState<string[]>(loadChartLines);
-  const [timeRange, setTimeRange] = useState<UsageTimeRange>(loadTimeRange);
-
-  const filteredUsage = useMemo(
-    () => (usage ? filterUsageByTimeRange(usage, timeRange) : null),
-    [usage, timeRange]
-  );
-  const hourWindowHours =
-    timeRange === 'all' ? undefined : HOUR_WINDOW_BY_TIME_RANGE[timeRange];
 
   const handleChartLinesChange = useCallback((lines: string[]) => {
     setChartLines(normalizeChartLines(lines));
@@ -172,7 +155,7 @@ export function UsagePage() {
     rpmSparkline,
     tpmSparkline,
     costSparkline
-  } = useSparklines({ usage: filteredUsage, loading });
+  } = useSparklines({ sparklines: dashboard?.sparklines ?? null, loading });
 
   // Chart data hook
   const {
@@ -184,23 +167,22 @@ export function UsagePage() {
     tokensChartData,
     requestsChartOptions,
     tokensChartOptions
-  } = useChartData({ usage: filteredUsage, chartLines, isDark, isMobile, hourWindowHours });
+  } = useChartData({ charts: dashboard?.charts ?? null, chartLines, isDark, isMobile });
 
   // Derived data
-  const modelNames = useMemo(() => getModelNamesFromUsage(usage), [usage]);
-  const apiStats = useMemo(
-    () => getApiStats(filteredUsage, modelPrices),
-    [filteredUsage, modelPrices]
+  const modelNames = useMemo(
+    () =>
+      Array.from(
+        new Set([...(dashboard?.model_names || []), ...Object.keys(modelPrices)])
+      ).sort((a, b) => a.localeCompare(b)),
+    [dashboard?.model_names, modelPrices]
   );
-  const modelStats = useMemo(
-    () => getModelStats(filteredUsage, modelPrices),
-    [filteredUsage, modelPrices]
-  );
-  const hasPrices = Object.keys(modelPrices).length > 0;
+  const apiStats = dashboard?.api_stats || [];
+  const modelStats = dashboard?.model_stats || [];
 
   return (
     <div className={styles.container}>
-      {loading && !usage && (
+      {loading && !dashboard && (
         <div className={styles.loadingOverlay} aria-busy="true">
           <div className={styles.loadingOverlayContent}>
             <LoadingSpinner size={28} className={styles.loadingOverlaySpinner} />
@@ -270,9 +252,9 @@ export function UsagePage() {
 
       {/* Stats Overview Cards */}
       <StatCards
-        usage={filteredUsage}
+        summary={dashboard?.summary ?? null}
+        rates={dashboard?.rates ?? null}
         loading={loading}
-        modelPrices={modelPrices}
         sparklines={{
           requests: requestsSparkline,
           tokens: tokensSparkline,
@@ -316,14 +298,15 @@ export function UsagePage() {
 
       {/* Details Grid */}
       <div className={styles.detailsGrid}>
-        <ApiDetailsCard apiStats={apiStats} loading={loading} hasPrices={hasPrices} />
-        <ModelStatsCard modelStats={modelStats} loading={loading} hasPrices={hasPrices} />
+        <ApiDetailsCard apiStats={apiStats} loading={loading} />
+        <ModelStatsCard modelStats={modelStats} loading={loading} />
       </div>
 
       {/* Price Settings */}
       <PriceSettingsCard
         modelNames={modelNames}
         modelPrices={modelPrices}
+        savedModelPrices={savedModelPrices}
         onPricesChange={setModelPrices}
       />
     </div>
