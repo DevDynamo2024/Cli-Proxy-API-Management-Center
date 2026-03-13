@@ -25,6 +25,8 @@ export interface ApiKeyPolicy {
   excludedModels: string[];
   allowClaudeOpus46: boolean;
   dailyLimits: Record<string, number>;
+  dailyBudgetUsd: number;
+  weeklyBudgetUsd: number;
   modelRoutingRules: ModelRoutingRule[];
   claudeFailoverEnabled: boolean;
   claudeFailoverTargetModel: string;
@@ -37,6 +39,8 @@ type ApiKeyPolicyDTO = {
   'excluded-models'?: unknown;
   'allow-claude-opus-4-6'?: unknown;
   'daily-limits'?: unknown;
+  'daily-budget-usd'?: unknown;
+  'weekly-budget-usd'?: unknown;
   'model-routing'?: unknown;
   failover?: unknown;
 };
@@ -81,6 +85,22 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
       if (key && Number.isFinite(num) && num > 0) dailyLimits[key] = Math.floor(num);
     }
   }
+
+  const dailyBudgetRaw = dto['daily-budget-usd'];
+  const dailyBudgetUsd =
+    typeof dailyBudgetRaw === 'number'
+      ? dailyBudgetRaw > 0
+        ? dailyBudgetRaw
+        : 0
+      : Math.max(0, Number(String(dailyBudgetRaw ?? '')) || 0);
+
+  const weeklyBudgetRaw = dto['weekly-budget-usd'];
+  const weeklyBudgetUsd =
+    typeof weeklyBudgetRaw === 'number'
+      ? weeklyBudgetRaw > 0
+        ? weeklyBudgetRaw
+        : 0
+      : Math.max(0, Number(String(weeklyBudgetRaw ?? '')) || 0);
 
   const failoverRaw = dto.failover;
   let claudeFailoverEnabled = false;
@@ -159,6 +179,8 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     excludedModels,
     allowClaudeOpus46,
     dailyLimits,
+    dailyBudgetUsd,
+    weeklyBudgetUsd,
     modelRoutingRules,
     claudeFailoverEnabled,
     claudeFailoverTargetModel,
@@ -200,6 +222,8 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     'excluded-models': policy.excludedModels,
     'allow-claude-opus-4-6': policy.allowClaudeOpus46,
     'daily-limits': policy.dailyLimits,
+    'daily-budget-usd': policy.dailyBudgetUsd,
+    'weekly-budget-usd': policy.weeklyBudgetUsd,
     'model-routing': { rules: routingRules },
     failover: {
       claude: {

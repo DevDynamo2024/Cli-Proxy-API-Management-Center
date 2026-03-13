@@ -55,6 +55,19 @@ function parsePositiveInt(text: string): number | null {
   return i > 0 ? i : null;
 }
 
+function parsePositiveNumber(text: string): number | null {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100) / 100;
+}
+
+function formatBudgetValue(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
 function sanitizeFailoverRules(raw: ModelFailoverRule[]): ModelFailoverRule[] {
   if (!Array.isArray(raw) || raw.length === 0) return [];
   const out: ModelFailoverRule[] = [];
@@ -121,6 +134,10 @@ export function APIKeyPoliciesPage() {
   });
   const [allowOpus46, setAllowOpus46] = useState(true);
   const [opus46DailyLimit, setOpus46DailyLimit] = useState('');
+  const [dailyBudgetEnabled, setDailyBudgetEnabled] = useState(false);
+  const [dailyBudgetUsd, setDailyBudgetUsd] = useState('');
+  const [weeklyBudgetEnabled, setWeeklyBudgetEnabled] = useState(false);
+  const [weeklyBudgetUsd, setWeeklyBudgetUsd] = useState('');
   const [excludedExact, setExcludedExact] = useState<Set<string>>(new Set());
   const [excludedCustom, setExcludedCustom] = useState<string[]>([]);
   const [upstreamProxyEnabled, setUpstreamProxyEnabled] = useState(false);
@@ -208,6 +225,8 @@ export function APIKeyPoliciesPage() {
         excludedModels: [],
         allowClaudeOpus46: true,
         dailyLimits: {},
+        dailyBudgetUsd: 0,
+        weeklyBudgetUsd: 0,
         modelRoutingRules: [],
         claudeFailoverEnabled: false,
         claudeFailoverTargetModel: DEFAULT_GPT54_TARGET,
@@ -224,6 +243,10 @@ export function APIKeyPoliciesPage() {
 
     const limit = p.dailyLimits?.[OPUS_46_ID] ?? p.dailyLimits?.[OPUS_46_ID.toLowerCase()];
     setOpus46DailyLimit(limit && Number.isFinite(limit) ? String(limit) : '');
+    setDailyBudgetEnabled(Number(p.dailyBudgetUsd ?? 0) > 0);
+    setDailyBudgetUsd(formatBudgetValue(Number(p.dailyBudgetUsd ?? 0)));
+    setWeeklyBudgetEnabled(Number(p.weeklyBudgetUsd ?? 0) > 0);
+    setWeeklyBudgetUsd(formatBudgetValue(Number(p.weeklyBudgetUsd ?? 0)));
 
     const excluded = uniqStrings(p.excludedModels || []);
     const custom = excluded.filter((x) => x.includes('*') || !claudeModelIdSet.has(x));
@@ -379,8 +402,25 @@ export function APIKeyPoliciesPage() {
     }
 
     const dailyLimit = parsePositiveInt(opus46DailyLimit);
+    const parsedDailyBudgetUsd = dailyBudgetEnabled ? parsePositiveNumber(dailyBudgetUsd) : null;
+    const parsedWeeklyBudgetUsd = weeklyBudgetEnabled ? parsePositiveNumber(weeklyBudgetUsd) : null;
     const dailyLimits: Record<string, number> = {};
     if (dailyLimit) dailyLimits[OPUS_46_ID] = dailyLimit;
+
+    if (dailyBudgetEnabled && parsedDailyBudgetUsd == null) {
+      showNotification(
+        t('api_key_policies.daily_budget_invalid', { defaultValue: '请填写有效的每日额度（USD）' }),
+        'error'
+      );
+      return;
+    }
+    if (weeklyBudgetEnabled && parsedWeeklyBudgetUsd == null) {
+      showNotification(
+        t('api_key_policies.weekly_budget_invalid', { defaultValue: '请填写有效的每周额度（USD）' }),
+        'error'
+      );
+      return;
+    }
 
     const excludedModels = uniqStrings([...excludedCustom, ...Array.from(excludedExact)]);
     const rules = sanitizeFailoverRules(claudeFailoverRules);
@@ -393,6 +433,8 @@ export function APIKeyPoliciesPage() {
         allowClaudeOpus46: allowOpus46,
         excludedModels,
         dailyLimits,
+        dailyBudgetUsd: parsedDailyBudgetUsd ?? 0,
+        weeklyBudgetUsd: parsedWeeklyBudgetUsd ?? 0,
         modelRoutingRules: routingRules,
         claudeFailoverEnabled,
         claudeFailoverTargetModel,
@@ -409,6 +451,8 @@ export function APIKeyPoliciesPage() {
     }
   }, [
     allowOpus46,
+    dailyBudgetEnabled,
+    dailyBudgetUsd,
     claudeFailoverEnabled,
     claudeFailoverRules,
     claudeFailoverTargetModel,
@@ -422,6 +466,8 @@ export function APIKeyPoliciesPage() {
     t,
     upstreamBaseUrl,
     upstreamProxyEnabled,
+    weeklyBudgetEnabled,
+    weeklyBudgetUsd,
   ]);
 
   const handleDelete = useCallback(async () => {
@@ -449,7 +495,7 @@ export function APIKeyPoliciesPage() {
         <p className={styles.description}>
           {t('api_key_policies.description', {
             defaultValue:
-              '按不同 API Key 限制可用模型、配置上游代理转发、模型路由/Failover、Opus 4.6 访问与每日次数上限（UTC+8）',
+              '面向中转站运营的 API Key 精细化控制台：集中管理模型访问、成本额度、上游转发、模型路由与故障切换。',
           })}
         </p>
       </div>
@@ -548,6 +594,18 @@ export function APIKeyPoliciesPage() {
 
           {activeTab === 'basic' ? (
             <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>
+                  {t('api_key_policies.guardrails_title', { defaultValue: '访问与额度守卫' })}
+                </h3>
+              </div>
+              <div className={styles.sectionHint}>
+                {t('api_key_policies.guardrails_hint', {
+                  defaultValue:
+                    '建议先定义这个 API Key 的访问边界，再决定是否开放高成本模型与预算。次数限制与费用额度均由服务端持久化统计。',
+                })}
+              </div>
+
               <div className={styles.fieldRow}>
                 <div className={styles.fieldText}>
                   <div className={styles.fieldLabel}>
@@ -587,6 +645,79 @@ export function APIKeyPoliciesPage() {
                   defaultValue:
                     '每日次数按 UTC+8（中国标准时间）统计，服务端使用 SQLite 持久化计数。',
                 })}
+              </div>
+
+              <div className={styles.budgetGrid}>
+                <div className={styles.budgetCard}>
+                  <div className={styles.budgetCardHeader}>
+                    <div>
+                      <div className={styles.budgetTitle}>
+                        {t('api_key_policies.daily_budget_title', { defaultValue: '每日成本上限' })}
+                      </div>
+                      <div className={styles.budgetHint}>
+                        {t('api_key_policies.daily_budget_hint', {
+                          defaultValue: '按 UTC+8 自然日统计，达到上限后立即拒绝新请求。',
+                        })}
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={dailyBudgetEnabled}
+                      onChange={setDailyBudgetEnabled}
+                      disabled={disableControls || !selectedKey}
+                      ariaLabel={t('api_key_policies.daily_budget_toggle', {
+                        defaultValue: '启用每日成本上限',
+                      })}
+                    />
+                  </div>
+                  <Input
+                    label={t('api_key_policies.daily_budget_input', { defaultValue: '每日额度（USD）' })}
+                    hint={t('api_key_policies.daily_budget_input_hint', {
+                      defaultValue: '支持整数或两位小数；留空或关闭即不限。',
+                    })}
+                    value={dailyBudgetUsd}
+                    onChange={(e) => setDailyBudgetUsd(e.target.value)}
+                    placeholder="100"
+                    disabled={disableControls || !selectedKey || !dailyBudgetEnabled}
+                  />
+                </div>
+
+                <div className={[styles.budgetCard, styles.budgetCardEmphasis].join(' ')}>
+                  <div className={styles.budgetCardHeader}>
+                    <div>
+                      <div className={styles.budgetTitle}>
+                        {t('api_key_policies.weekly_budget_title', { defaultValue: '每周成本上限' })}
+                      </div>
+                      <div className={styles.budgetHint}>
+                        {t('api_key_policies.weekly_budget_hint', {
+                          defaultValue: '按 UTC+8 周一 00:00 到下周一 00:00 统计，适合团队周预算管理。',
+                        })}
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={weeklyBudgetEnabled}
+                      onChange={setWeeklyBudgetEnabled}
+                      disabled={disableControls || !selectedKey}
+                      ariaLabel={t('api_key_policies.weekly_budget_toggle', {
+                        defaultValue: '启用每周成本上限',
+                      })}
+                    />
+                  </div>
+                  <Input
+                    label={t('api_key_policies.weekly_budget_input', { defaultValue: '每周额度（USD）' })}
+                    hint={t('api_key_policies.weekly_budget_input_hint', {
+                      defaultValue: '例如 400；默认关闭，开启后才生效。',
+                    })}
+                    value={weeklyBudgetUsd}
+                    onChange={(e) => setWeeklyBudgetUsd(e.target.value)}
+                    placeholder="400"
+                    disabled={disableControls || !selectedKey || !weeklyBudgetEnabled}
+                  />
+                  <div className={styles.budgetFootnote}>
+                    {t('api_key_policies.weekly_budget_note', {
+                      defaultValue: '系统会基于后端持久化 billing 数据判断是否超额，容器重启后不会丢失历史周用量。',
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
