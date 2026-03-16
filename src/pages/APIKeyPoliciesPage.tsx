@@ -24,6 +24,10 @@ import type {
   ModelFailoverRule,
   ModelRoutingRule,
 } from '@/services/api/apiKeyPolicies';
+import {
+  toModelFailoverRuleDTOs,
+  toModelRoutingRuleDTOs,
+} from '@/services/api/apiKeyPolicies';
 import styles from './APIKeyPoliciesPage.module.scss';
 
 type ModelDef = { id: string; display_name?: string };
@@ -274,7 +278,10 @@ export function APIKeyPoliciesPage() {
         apiClient.get<Record<string, unknown>>('/api-key-policies'),
         authFilesApi.getModelDefinitions('codex'),
       ]);
-      const normalizedKeys = uniqStrings(keys);
+      const normalizedKeys = uniqStrings([
+        ...keys,
+        ...policyList.map((policy) => String(policy.apiKey ?? '').trim()),
+      ]);
       const enableClaudeModelsByKey = new Map<string, boolean>();
       const rawPolicies = rawPolicyResp['api-key-policies'];
       if (Array.isArray(rawPolicies)) {
@@ -425,8 +432,7 @@ export function APIKeyPoliciesPage() {
         const next = prev.slice();
         next[i] = {
           ...next[i],
-          targetModel:
-            String(next[i].targetModel ?? '').trim() || String(defaultTargetModel ?? '').trim(),
+          targetModel: String(defaultTargetModel ?? '').trim(),
         };
         return next;
       }
@@ -487,8 +493,7 @@ export function APIKeyPoliciesPage() {
         next[i] = {
           ...next[i],
           enabled: true,
-          targetModel:
-            String(next[i].targetModel ?? '').trim() || String(defaultTargetModel ?? '').trim(),
+          targetModel: String(defaultTargetModel ?? '').trim(),
           stickyWindowSeconds: next[i].stickyWindowSeconds || DEFAULT_STICKY_WINDOW_SECONDS,
         };
         return next;
@@ -559,6 +564,8 @@ export function APIKeyPoliciesPage() {
     ]);
     const rules = sanitizeFailoverRules(claudeFailoverRules);
     const routingRules = sanitizeRoutingRules(modelRoutingRules);
+    const failoverRuleDTOs = toModelFailoverRuleDTOs(rules);
+    const routingRuleDTOs = toModelRoutingRuleDTOs(routingRules);
     const weeklyBudgetAnchorValue = parsedWeeklyBudgetAnchorAt ?? '';
 
     try {
@@ -573,12 +580,12 @@ export function APIKeyPoliciesPage() {
           'daily-budget-usd': parsedDailyBudgetUsd ?? 0,
           'weekly-budget-usd': parsedWeeklyBudgetUsd ?? 0,
           'weekly-budget-anchor-at': weeklyBudgetAnchorValue,
-          'model-routing': { rules: routingRules },
+          'model-routing': { rules: routingRuleDTOs },
           failover: {
             claude: {
               enabled: claudeFailoverEnabled,
               'target-model': claudeFailoverTargetModel,
-              rules,
+              rules: failoverRuleDTOs,
             },
           },
         },
@@ -599,6 +606,7 @@ export function APIKeyPoliciesPage() {
     claudeFailoverEnabled,
     claudeFailoverRules,
     claudeFailoverTargetModel,
+    enableClaudeModels,
     allowClaudeCategory,
     allowChatGPTCategory,
     excludedCustom,

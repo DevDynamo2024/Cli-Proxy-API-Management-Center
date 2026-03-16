@@ -34,7 +34,7 @@ export interface ApiKeyPolicy {
   claudeFailoverRules: ModelFailoverRule[];
 }
 
-type ApiKeyPolicyDTO = {
+export type ApiKeyPolicyDTO = {
   'api-key': string;
   'upstream-base-url'?: unknown;
   'excluded-models'?: unknown;
@@ -47,18 +47,49 @@ type ApiKeyPolicyDTO = {
   failover?: unknown;
 };
 
-type ModelFailoverRuleDTO = {
+export type ModelFailoverRuleDTO = {
   'from-model'?: unknown;
   'target-model'?: unknown;
 };
 
-type ModelRoutingRuleDTO = {
+export type ModelRoutingRuleDTO = {
   enabled?: unknown;
   'from-model'?: unknown;
   'target-model'?: unknown;
   'target-percent'?: unknown;
   'sticky-window-seconds'?: unknown;
 };
+
+export function toModelRoutingRuleDTOs(rules: ModelRoutingRule[]): ModelRoutingRuleDTO[] {
+  return Array.isArray(rules)
+    ? rules
+        .map((r) => ({
+          enabled: Boolean(r?.enabled ?? true),
+          'from-model': String(r?.fromModel ?? '').trim(),
+          'target-model': String(r?.targetModel ?? '').trim(),
+          'target-percent':
+            typeof r?.targetPercent === 'number'
+              ? Math.max(0, Math.min(100, Math.floor(r.targetPercent)))
+              : Number(String(r?.targetPercent ?? 0)) || 0,
+          'sticky-window-seconds':
+            typeof r?.stickyWindowSeconds === 'number'
+              ? Math.max(1, Math.floor(r.stickyWindowSeconds))
+              : Number(String(r?.stickyWindowSeconds ?? 3600)) || 3600,
+        }))
+        .filter((r) => r['from-model'] && r['target-model'])
+    : [];
+}
+
+export function toModelFailoverRuleDTOs(rules: ModelFailoverRule[]): ModelFailoverRuleDTO[] {
+  return Array.isArray(rules)
+    ? rules
+        .map((r) => ({
+          'from-model': String(r?.fromModel ?? '').trim(),
+          'target-model': String(r?.targetModel ?? '').trim(),
+        }))
+        .filter((r) => r['from-model'] && r['target-model'])
+    : [];
+}
 
 function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -193,32 +224,8 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
 }
 
 function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
-  const routingRules = Array.isArray(policy.modelRoutingRules)
-    ? policy.modelRoutingRules
-        .map((r) => ({
-          enabled: Boolean(r?.enabled ?? true),
-          'from-model': String(r?.fromModel ?? '').trim(),
-          'target-model': String(r?.targetModel ?? '').trim(),
-          'target-percent':
-            typeof r?.targetPercent === 'number'
-              ? Math.max(0, Math.min(100, Math.floor(r.targetPercent)))
-              : Number(String(r?.targetPercent ?? 0)) || 0,
-          'sticky-window-seconds':
-            typeof r?.stickyWindowSeconds === 'number'
-              ? Math.max(1, Math.floor(r.stickyWindowSeconds))
-              : Number(String(r?.stickyWindowSeconds ?? 3600)) || 3600,
-        }))
-        .filter((r) => r['from-model'] && r['target-model'])
-    : [];
-
-  const rules = Array.isArray(policy.claudeFailoverRules)
-    ? policy.claudeFailoverRules
-        .map((r) => ({
-          'from-model': String(r?.fromModel ?? '').trim(),
-          'target-model': String(r?.targetModel ?? '').trim(),
-        }))
-        .filter((r) => r['from-model'] && r['target-model'])
-    : [];
+  const routingRules = toModelRoutingRuleDTOs(policy.modelRoutingRules);
+  const rules = toModelFailoverRuleDTOs(policy.claudeFailoverRules);
 
   return {
     'api-key': policy.apiKey,
