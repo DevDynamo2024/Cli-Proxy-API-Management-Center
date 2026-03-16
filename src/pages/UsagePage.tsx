@@ -51,6 +51,29 @@ const DEFAULT_CHART_LINES = ['all'];
 const DEFAULT_TIME_RANGE: UsageTimeRange = '24h';
 const MAX_CHART_LINES = 9;
 
+function getRangeDurationMs(range: UsageTimeRange): number | null {
+  if (range === '7h') return 7 * 60 * 60 * 1000;
+  if (range === '24h') return 24 * 60 * 60 * 1000;
+  if (range === '7d') return 7 * 24 * 60 * 60 * 1000;
+  return null;
+}
+
+function formatWindowLabel(range: UsageTimeRange, generatedAt?: string): string {
+  const durationMs = getRangeDurationMs(range);
+  if (!durationMs || !generatedAt) return '';
+  const end = new Date(generatedAt);
+  if (Number.isNaN(end.getTime())) return '';
+  const start = new Date(end.getTime() - durationMs);
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  return `${formatter.format(start)} - ${formatter.format(end)}`;
+}
+
 const isUsageTimeRange = (value: unknown): value is UsageTimeRange =>
   value === '7h' || value === '24h' || value === '7d' || value === 'all';
 
@@ -116,8 +139,14 @@ export function UsagePage() {
     handleImport,
     handleImportChange,
     importInputRef,
+    handleModelPricesExport,
+    handleModelPricesImport,
+    handleModelPricesImportChange,
+    modelPricesImportInputRef,
     exporting,
-    importing
+    importing,
+    modelPricesExporting,
+    modelPricesImporting
   } = useUsageData(timeRange);
 
   useHeaderRefresh(loadUsage);
@@ -179,6 +208,10 @@ export function UsagePage() {
   );
   const apiStats = dashboard?.api_stats || [];
   const modelStats = dashboard?.model_stats || [];
+  const activeWindowLabel = useMemo(
+    () => formatWindowLabel(timeRange, dashboard?.generated_at),
+    [dashboard?.generated_at, timeRange]
+  );
 
   return (
     <div className={styles.container}>
@@ -211,6 +244,14 @@ export function UsagePage() {
                 <IconChevronDown size={14} />
               </span>
             </div>
+            {activeWindowLabel ? (
+              <span className={styles.timeRangeWindow}>
+                {t('usage_stats.active_window', {
+                  defaultValue: '当前滚动窗口：{{window}}',
+                  window: activeWindowLabel
+                })}
+              </span>
+            ) : null}
           </div>
           <Button
             variant="secondary"
@@ -308,6 +349,12 @@ export function UsagePage() {
         modelPrices={modelPrices}
         savedModelPrices={savedModelPrices}
         onPricesChange={setModelPrices}
+        onExport={handleModelPricesExport}
+        onImport={handleModelPricesImport}
+        onImportChange={handleModelPricesImportChange}
+        importInputRef={modelPricesImportInputRef}
+        exporting={modelPricesExporting}
+        importing={modelPricesImporting}
       />
     </div>
   );

@@ -17,22 +17,28 @@ import {
 } from '@/components/ui/icons';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useNotificationStore } from '@/stores';
+import { apiClient } from '@/services/api/client';
 import { apiKeysApi, apiKeyPoliciesApi, authFilesApi } from '@/services/api';
 import type {
-  ApiKeyPolicy,
+  ApiKeyPolicy as StoredApiKeyPolicy,
   ModelFailoverRule,
   ModelRoutingRule,
 } from '@/services/api/apiKeyPolicies';
 import styles from './APIKeyPoliciesPage.module.scss';
 
 type ModelDef = { id: string; display_name?: string };
+type ApiKeyPolicy = StoredApiKeyPolicy & { enableClaudeModels?: boolean };
 type PolicyTab = 'basic' | 'routing' | 'failover';
+type AccessCategory = 'claude' | 'chatgpt';
 
 const OPUS_46_ID = 'claude-opus-4-6';
 const OPUS_46_RULE_PATTERN = 'claude-opus-4-6*';
 const SONNET_46_RULE_PATTERN = 'claude-sonnet-4-6*';
 const DEFAULT_STICKY_WINDOW_SECONDS = 3600;
-const DEFAULT_GPT54_TARGET = 'gpt-5.4(high)';
+const DEFAULT_GPT54_TARGET = 'gpt-5.4(medium)';
+const GPT54_HIGH_TARGET = 'gpt-5.4(high)';
+const CLAUDE_CATEGORY_PATTERNS = ['claude-*'] as const;
+const CHATGPT_CATEGORY_PATTERNS = ['gpt-*', 'chatgpt-*', 'o1*', 'o3*', 'o4*'] as const;
 
 function uniqStrings(list: string[]): string[] {
   const seen = new Set<string>();
@@ -44,6 +50,23 @@ function uniqStrings(list: string[]): string[] {
     out.push(t);
   }
   return out;
+}
+
+function normalizeModelPattern(value: string): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function hasManagedCategoryPattern(list: string[], patterns: readonly string[]): boolean {
+  const normalized = new Set(list.map(normalizeModelPattern).filter(Boolean));
+  return patterns.some((pattern) => normalized.has(pattern));
+}
+
+function stripManagedCategoryPatterns(list: string[]): string[] {
+  const managed = new Set<string>([...CLAUDE_CATEGORY_PATTERNS, ...CHATGPT_CATEGORY_PATTERNS]);
+  return list.filter((item) => {
+    const normalized = normalizeModelPattern(item);
+    return normalized !== '' && !managed.has(normalized);
+  });
 }
 
 function parsePositiveInt(text: string): number | null {
@@ -61,6 +84,77 @@ function parsePositiveNumber(text: string): number | null {
   const n = Number(trimmed);
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n * 100) / 100;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function getLocalHourInputValue(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:00`;
+}
+
+function getCurrentHourInputValue(): string {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  return getLocalHourInputValue(now);
+}
+
+function normalizeHourInputValue(raw: string): string {
+  const trimmed = String(raw ?? '').trim();
+  if (!trimmed) return '';
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '';
+  parsed.setMinutes(0, 0, 0);
+  return getLocalHourInputValue(parsed);
+}
+
+function formatRFC3339WithLocalOffset(date: Date): string {
+  const year = date.getFullYear();
+  const month = pad2(date.getMonth() + 1);
+  const day = pad2(date.getDate());
+  const hours = pad2(date.getHours());
+  const minutes = pad2(date.getMinutes());
+  const seconds = pad2(date.getSeconds());
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absOffset = Math.abs(offsetMinutes);
+  const offsetHours = pad2(Math.floor(absOffset / 60));
+  const offsetRemainder = pad2(absOffset % 60);
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetRemainder}`;
+}
+
+function toHourlyRFC3339(raw: string): string | null {
+  const normalized = normalizeHourInputValue(raw);
+  if (!normalized) return null;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return null;
+  parsed.setMinutes(0, 0, 0);
+  return formatRFC3339WithLocalOffset(parsed);
+}
+
+function buildWeeklyBudgetWindowLabel(raw: string): string {
+  const normalized = normalizeHourInputValue(raw);
+  if (!normalized) return '';
+  const anchor = new Date(normalized);
+  if (Number.isNaN(anchor.getTime())) return '';
+  const durationMs = 7 * 24 * 60 * 60 * 1000;
+  const now = new Date();
+  let start = anchor;
+  if (now.getTime() > anchor.getTime()) {
+    const elapsed = now.getTime() - anchor.getTime();
+    const windows = Math.floor(elapsed / durationMs);
+    start = new Date(anchor.getTime() + windows * durationMs);
+  }
+  const end = new Date(start.getTime() + durationMs);
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
 
 function formatBudgetValue(value: number): string {
@@ -121,7 +215,6 @@ export function APIKeyPoliciesPage() {
 
   const [apiKeys, setApiKeys] = useState<string[]>([]);
   const [policies, setPolicies] = useState<ApiKeyPolicy[]>([]);
-  const [claudeModels, setClaudeModels] = useState<ModelDef[]>([]);
   const [codexModels, setCodexModels] = useState<ModelDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -132,13 +225,16 @@ export function APIKeyPoliciesPage() {
     if (saved === 'basic' || saved === 'routing' || saved === 'failover') return saved;
     return 'basic';
   });
+  const [enableClaudeModels, setEnableClaudeModels] = useState(false);
   const [allowOpus46, setAllowOpus46] = useState(true);
   const [opus46DailyLimit, setOpus46DailyLimit] = useState('');
   const [dailyBudgetEnabled, setDailyBudgetEnabled] = useState(false);
   const [dailyBudgetUsd, setDailyBudgetUsd] = useState('');
   const [weeklyBudgetEnabled, setWeeklyBudgetEnabled] = useState(false);
   const [weeklyBudgetUsd, setWeeklyBudgetUsd] = useState('');
-  const [excludedExact, setExcludedExact] = useState<Set<string>>(new Set());
+  const [weeklyBudgetAnchorAt, setWeeklyBudgetAnchorAt] = useState('');
+  const [allowClaudeCategory, setAllowClaudeCategory] = useState(true);
+  const [allowChatGPTCategory, setAllowChatGPTCategory] = useState(true);
   const [excludedCustom, setExcludedCustom] = useState<string[]>([]);
   const [upstreamProxyEnabled, setUpstreamProxyEnabled] = useState(false);
   const [upstreamBaseUrl, setUpstreamBaseUrl] = useState('');
@@ -147,11 +243,11 @@ export function APIKeyPoliciesPage() {
   const [claudeFailoverTargetModel, setClaudeFailoverTargetModel] = useState(DEFAULT_GPT54_TARGET);
   const [claudeFailoverRules, setClaudeFailoverRules] = useState<ModelFailoverRule[]>([]);
 
-  const claudeModelIdSet = useMemo(() => new Set(claudeModels.map((m) => m.id)), [claudeModels]);
   const upstreamBaseUrlTrimmed = upstreamBaseUrl.trim();
   const upstreamProxyActive = upstreamProxyEnabled && upstreamBaseUrlTrimmed !== '';
   const routingControlsDisabled = disableControls || !selectedKey;
   const failoverControlsDisabled = disableControls || !selectedKey;
+  const allowedCategoryCount = Number(allowClaudeCategory) + Number(allowChatGPTCategory);
 
   const currentPolicy = useMemo(() => {
     const key = selectedKey.trim();
@@ -172,19 +268,35 @@ export function APIKeyPoliciesPage() {
     setLoading(true);
     setError('');
     try {
-      const [keys, policyList, models, codexDefs] = await Promise.all([
+      const [keys, policyList, rawPolicyResp, codexDefs] = await Promise.all([
         apiKeysApi.list(),
         apiKeyPoliciesApi.list(),
-        authFilesApi.getModelDefinitions('claude'),
+        apiClient.get<Record<string, unknown>>('/api-key-policies'),
         authFilesApi.getModelDefinitions('codex'),
       ]);
       const normalizedKeys = uniqStrings(keys);
+      const enableClaudeModelsByKey = new Map<string, boolean>();
+      const rawPolicies = rawPolicyResp['api-key-policies'];
+      if (Array.isArray(rawPolicies)) {
+        rawPolicies.forEach((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+          const record = item as Record<string, unknown>;
+          const apiKey = String(record['api-key'] ?? '').trim();
+          if (!apiKey) return;
+          const rawValue = record['enable-claude-models'];
+          enableClaudeModelsByKey.set(
+            apiKey,
+            typeof rawValue === 'boolean' ? rawValue : Boolean(rawValue)
+          );
+        });
+      }
+
       setApiKeys(normalizedKeys);
-      setPolicies(policyList);
-      setClaudeModels(
-        (models || [])
-          .map((m) => ({ id: String(m.id ?? '').trim(), display_name: m.display_name }))
-          .filter((m) => m.id)
+      setPolicies(
+        policyList.map((policy) => ({
+          ...policy,
+          enableClaudeModels: enableClaudeModelsByKey.get(policy.apiKey) ?? false,
+        }))
       );
       setCodexModels(
         (codexDefs || [])
@@ -221,18 +333,21 @@ export function APIKeyPoliciesPage() {
       policies.find((x) => x.apiKey === key) ??
       ({
         apiKey: key,
+        enableClaudeModels: false,
         upstreamBaseUrl: '',
         excludedModels: [],
         allowClaudeOpus46: true,
         dailyLimits: {},
         dailyBudgetUsd: 0,
         weeklyBudgetUsd: 0,
+        weeklyBudgetAnchorAt: '',
         modelRoutingRules: [],
         claudeFailoverEnabled: false,
         claudeFailoverTargetModel: DEFAULT_GPT54_TARGET,
         claudeFailoverRules: [],
       } as ApiKeyPolicy);
 
+    setEnableClaudeModels(Boolean(p.enableClaudeModels));
     setAllowOpus46(p.allowClaudeOpus46 ?? true);
     setClaudeFailoverEnabled(Boolean(p.claudeFailoverEnabled));
     setClaudeFailoverTargetModel(
@@ -247,26 +362,29 @@ export function APIKeyPoliciesPage() {
     setDailyBudgetUsd(formatBudgetValue(Number(p.dailyBudgetUsd ?? 0)));
     setWeeklyBudgetEnabled(Number(p.weeklyBudgetUsd ?? 0) > 0);
     setWeeklyBudgetUsd(formatBudgetValue(Number(p.weeklyBudgetUsd ?? 0)));
+    setWeeklyBudgetAnchorAt(normalizeHourInputValue(p.weeklyBudgetAnchorAt) || getCurrentHourInputValue());
 
     const excluded = uniqStrings(p.excludedModels || []);
-    const custom = excluded.filter((x) => x.includes('*') || !claudeModelIdSet.has(x));
-    const exact = excluded.filter((x) => !x.includes('*') && claudeModelIdSet.has(x));
-
-    setExcludedCustom(custom);
-    setExcludedExact(new Set(exact));
+    setAllowClaudeCategory(!hasManagedCategoryPattern(excluded, CLAUDE_CATEGORY_PATTERNS));
+    setAllowChatGPTCategory(!hasManagedCategoryPattern(excluded, CHATGPT_CATEGORY_PATTERNS));
+    setExcludedCustom(stripManagedCategoryPatterns(excluded));
 
     const upstream = String(p.upstreamBaseUrl ?? '').trim();
     setUpstreamBaseUrl(upstream);
     setUpstreamProxyEnabled(Boolean(upstream));
-  }, [claudeModelIdSet, policies, selectedKey]);
+  }, [policies, selectedKey]);
 
-  const toggleModelAllowed = useCallback((modelId: string, allowed: boolean) => {
-    setExcludedExact((prev) => {
-      const next = new Set(prev);
-      if (allowed) next.delete(modelId);
-      else next.add(modelId);
-      return next;
-    });
+  useEffect(() => {
+    if (!weeklyBudgetEnabled) return;
+    setWeeklyBudgetAnchorAt((prev) => normalizeHourInputValue(prev) || getCurrentHourInputValue());
+  }, [weeklyBudgetEnabled]);
+
+  const toggleCategoryAllowed = useCallback((category: AccessCategory, allowed: boolean) => {
+    if (category === 'claude') {
+      setAllowClaudeCategory(allowed);
+      return;
+    }
+    setAllowChatGPTCategory(allowed);
   }, []);
 
   const updateFailoverRule = useCallback((idx: number, patch: Partial<ModelFailoverRule>) => {
@@ -404,6 +522,9 @@ export function APIKeyPoliciesPage() {
     const dailyLimit = parsePositiveInt(opus46DailyLimit);
     const parsedDailyBudgetUsd = dailyBudgetEnabled ? parsePositiveNumber(dailyBudgetUsd) : null;
     const parsedWeeklyBudgetUsd = weeklyBudgetEnabled ? parsePositiveNumber(weeklyBudgetUsd) : null;
+    const parsedWeeklyBudgetAnchorAt = weeklyBudgetEnabled
+      ? toHourlyRFC3339(weeklyBudgetAnchorAt)
+      : '';
     const dailyLimits: Record<string, number> = {};
     if (dailyLimit) dailyLimits[OPUS_46_ID] = dailyLimit;
 
@@ -421,24 +542,46 @@ export function APIKeyPoliciesPage() {
       );
       return;
     }
+    if (weeklyBudgetEnabled && !parsedWeeklyBudgetAnchorAt) {
+      showNotification(
+        t('api_key_policies.weekly_budget_anchor_invalid', {
+          defaultValue: '请填写有效的每周预算开始时间（精确到小时）',
+        }),
+        'error'
+      );
+      return;
+    }
 
-    const excludedModels = uniqStrings([...excludedCustom, ...Array.from(excludedExact)]);
+    const excludedModels = uniqStrings([
+      ...excludedCustom,
+      ...(allowClaudeCategory ? [] : CLAUDE_CATEGORY_PATTERNS),
+      ...(allowChatGPTCategory ? [] : CHATGPT_CATEGORY_PATTERNS),
+    ]);
     const rules = sanitizeFailoverRules(claudeFailoverRules);
     const routingRules = sanitizeRoutingRules(modelRoutingRules);
+    const weeklyBudgetAnchorValue = parsedWeeklyBudgetAnchorAt ?? '';
 
     try {
-      await apiKeyPoliciesApi.upsert({
-        apiKey,
-        upstreamBaseUrl: upstreamValue,
-        allowClaudeOpus46: allowOpus46,
-        excludedModels,
-        dailyLimits,
-        dailyBudgetUsd: parsedDailyBudgetUsd ?? 0,
-        weeklyBudgetUsd: parsedWeeklyBudgetUsd ?? 0,
-        modelRoutingRules: routingRules,
-        claudeFailoverEnabled,
-        claudeFailoverTargetModel,
-        claudeFailoverRules: rules,
+      await apiClient.patch('/api-key-policies', {
+        'api-key': apiKey,
+        value: {
+          'enable-claude-models': enableClaudeModels,
+          'upstream-base-url': upstreamValue,
+          'allow-claude-opus-4-6': allowOpus46,
+          'excluded-models': excludedModels,
+          'daily-limits': dailyLimits,
+          'daily-budget-usd': parsedDailyBudgetUsd ?? 0,
+          'weekly-budget-usd': parsedWeeklyBudgetUsd ?? 0,
+          'weekly-budget-anchor-at': weeklyBudgetAnchorValue,
+          'model-routing': { rules: routingRules },
+          failover: {
+            claude: {
+              enabled: claudeFailoverEnabled,
+              'target-model': claudeFailoverTargetModel,
+              rules,
+            },
+          },
+        },
       });
       await loadAll();
       showNotification(t('notification.save_success', { defaultValue: '保存成功' }), 'success');
@@ -456,8 +599,9 @@ export function APIKeyPoliciesPage() {
     claudeFailoverEnabled,
     claudeFailoverRules,
     claudeFailoverTargetModel,
+    allowClaudeCategory,
+    allowChatGPTCategory,
     excludedCustom,
-    excludedExact,
     loadAll,
     modelRoutingRules,
     opus46DailyLimit,
@@ -466,6 +610,7 @@ export function APIKeyPoliciesPage() {
     t,
     upstreamBaseUrl,
     upstreamProxyEnabled,
+    weeklyBudgetAnchorAt,
     weeklyBudgetEnabled,
     weeklyBudgetUsd,
   ]);
@@ -609,6 +754,30 @@ export function APIKeyPoliciesPage() {
               <div className={styles.fieldRow}>
                 <div className={styles.fieldText}>
                   <div className={styles.fieldLabel}>
+                    {t('api_key_policies.enable_claude_models', {
+                      defaultValue: '启用 Claude 模型',
+                    })}
+                  </div>
+                  <div className={styles.fieldHint}>
+                    {t('api_key_policies.enable_claude_models_hint', {
+                      defaultValue:
+                        '当系统页已开启“Claude 请求全局转 GPT”时，打开这里可让当前 API Key 继续使用 Claude 原模型。',
+                    })}
+                  </div>
+                </div>
+                <ToggleSwitch
+                  checked={enableClaudeModels}
+                  onChange={setEnableClaudeModels}
+                  disabled={disableControls || !selectedKey}
+                  ariaLabel={t('api_key_policies.enable_claude_models', {
+                    defaultValue: '启用 Claude 模型',
+                  })}
+                />
+              </div>
+
+              <div className={styles.fieldRow}>
+                <div className={styles.fieldText}>
+                  <div className={styles.fieldLabel}>
                     {t('api_key_policies.allow_opus46', { defaultValue: '允许 claude-opus-4-6' })}
                   </div>
                   <div className={styles.fieldHint}>
@@ -689,7 +858,7 @@ export function APIKeyPoliciesPage() {
                       </div>
                       <div className={styles.budgetHint}>
                         {t('api_key_policies.weekly_budget_hint', {
-                          defaultValue: '按 UTC+8 周一 00:00 到下周一 00:00 统计，适合团队周预算管理。',
+                          defaultValue: '按开始时间起算，连续 168 小时为一个预算窗口。',
                         })}
                       </div>
                     </div>
@@ -705,16 +874,42 @@ export function APIKeyPoliciesPage() {
                   <Input
                     label={t('api_key_policies.weekly_budget_input', { defaultValue: '每周额度（USD）' })}
                     hint={t('api_key_policies.weekly_budget_input_hint', {
-                      defaultValue: '例如 400；默认关闭，开启后才生效。',
+                      defaultValue: '例如 400；按开始时间起算，持续 7 天。',
                     })}
                     value={weeklyBudgetUsd}
                     onChange={(e) => setWeeklyBudgetUsd(e.target.value)}
                     placeholder="400"
                     disabled={disableControls || !selectedKey || !weeklyBudgetEnabled}
                   />
+                  <Input
+                    type="datetime-local"
+                    step={3600}
+                    label={t('api_key_policies.weekly_budget_anchor_label', {
+                      defaultValue: '开始时间',
+                    })}
+                    hint={t('api_key_policies.weekly_budget_anchor_hint', {
+                      defaultValue: '默认取当前小时；可自定义到整点，窗口固定为 168 小时滚动。',
+                    })}
+                    value={weeklyBudgetAnchorAt}
+                    onChange={(e) => setWeeklyBudgetAnchorAt(normalizeHourInputValue(e.target.value))}
+                    disabled={disableControls || !selectedKey || !weeklyBudgetEnabled}
+                  />
+                  {weeklyBudgetEnabled ? (
+                    <div className={styles.budgetFootnote}>
+                      {t('api_key_policies.weekly_budget_window', {
+                        defaultValue: '当前窗口：{{window}}',
+                        window:
+                          buildWeeklyBudgetWindowLabel(weeklyBudgetAnchorAt) ||
+                          t('api_key_policies.weekly_budget_window_pending', {
+                            defaultValue: '等待选择开始时间',
+                          }),
+                      })}
+                    </div>
+                  ) : null}
                   <div className={styles.budgetFootnote}>
                     {t('api_key_policies.weekly_budget_note', {
-                      defaultValue: '系统会基于后端持久化 billing 数据判断是否超额，容器重启后不会丢失历史周用量。',
+                      defaultValue:
+                        '系统会基于后端持久化 billing 数据判断是否超额，容器重启后不会丢失历史周用量。',
                     })}
                   </div>
                 </div>
@@ -789,9 +984,7 @@ export function APIKeyPoliciesPage() {
                       variant="secondary"
                       size="sm"
                       disabled={routingControlsDisabled}
-                      onClick={() =>
-                        upsertPresetRoutingRule(OPUS_46_RULE_PATTERN, DEFAULT_GPT54_TARGET)
-                      }
+                      onClick={() => upsertPresetRoutingRule(OPUS_46_RULE_PATTERN, GPT54_HIGH_TARGET)}
                     >
                       {t('api_key_policies.routing_add_opus46', { defaultValue: 'Opus 4.6' })}
                     </Button>
@@ -887,7 +1080,7 @@ export function APIKeyPoliciesPage() {
                               updateRoutingRule(idx, { targetModel: e.target.value })
                             }
                             placeholder={t('api_key_policies.routing_target_placeholder', {
-                              defaultValue: 'target-model，例如 gpt-5.4(high)',
+                              defaultValue: 'target-model，例如 gpt-5.4(medium)',
                             })}
                             disabled={routingControlsDisabled}
                             list="codex-model-definitions"
@@ -901,6 +1094,14 @@ export function APIKeyPoliciesPage() {
                             onClick={() =>
                               updateRoutingRule(idx, { targetModel: DEFAULT_GPT54_TARGET })
                             }
+                          >
+                            gpt-5.4(medium)
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={routingControlsDisabled}
+                            onClick={() => updateRoutingRule(idx, { targetModel: GPT54_HIGH_TARGET })}
                           >
                             gpt-5.4(high)
                           </Button>
@@ -1036,7 +1237,7 @@ export function APIKeyPoliciesPage() {
                 value={claudeFailoverTargetModel}
                 onChange={(e) => setClaudeFailoverTargetModel(e.target.value)}
                 placeholder={t('api_key_policies.failover_target_placeholder', {
-                  defaultValue: '默认 gpt-5.4(high)',
+                  defaultValue: '默认 gpt-5.4(medium)',
                 })}
                 disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                 list="codex-model-definitions"
@@ -1047,6 +1248,14 @@ export function APIKeyPoliciesPage() {
                   size="sm"
                   disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                   onClick={() => setClaudeFailoverTargetModel(DEFAULT_GPT54_TARGET)}
+                >
+                  gpt-5.4(medium)
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={failoverControlsDisabled || !claudeFailoverEnabled}
+                  onClick={() => setClaudeFailoverTargetModel(GPT54_HIGH_TARGET)}
                 >
                   gpt-5.4(high)
                 </Button>
@@ -1063,7 +1272,7 @@ export function APIKeyPoliciesPage() {
                     variant="secondary"
                     size="sm"
                     disabled={failoverControlsDisabled || !claudeFailoverEnabled}
-                    onClick={() => upsertPresetRule(OPUS_46_RULE_PATTERN, DEFAULT_GPT54_TARGET)}
+                    onClick={() => upsertPresetRule(OPUS_46_RULE_PATTERN, GPT54_HIGH_TARGET)}
                   >
                     {t('api_key_policies.add_opus46_rule', { defaultValue: '添加 Opus 4.6' })}
                   </Button>
@@ -1111,7 +1320,7 @@ export function APIKeyPoliciesPage() {
                           value={r.targetModel}
                           onChange={(e) => updateFailoverRule(idx, { targetModel: e.target.value })}
                           placeholder={t('api_key_policies.failover_rule_target_placeholder', {
-                            defaultValue: 'target-model，例如 gpt-5.4(high)',
+                            defaultValue: 'target-model，例如 gpt-5.4(medium)',
                           })}
                           disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                           list="codex-model-definitions"
@@ -1160,57 +1369,72 @@ export function APIKeyPoliciesPage() {
 
         <Card
           className={styles.panel}
-          title={t('api_key_policies.models_title', { defaultValue: 'Claude 模型访问' })}
+          title={t('api_key_policies.models_title', { defaultValue: '模型访问分类' })}
           extra={
-            claudeModels.length > 0 ? (
-              <span className={styles.statusPill}>
-                {t('api_key_policies.models_allowed_count', {
-                  defaultValue: '已允许 {{allowed}}/{{total}}',
-                  allowed: claudeModels.length - excludedExact.size,
-                  total: claudeModels.length,
-                })}
-              </span>
-            ) : null
+            <span className={styles.statusPill}>
+              {t('api_key_policies.models_allowed_count', {
+                defaultValue: '已允许 {{allowed}}/{{total}} 类',
+                allowed: allowedCategoryCount,
+                total: 2,
+              })}
+            </span>
           }
         >
           <div className={styles.hint}>
             {t('api_key_policies.models_hint', {
               defaultValue:
-                '默认全允许；取消勾选即加入 excluded-models。通配符排除项会保留但不在此列表展示。',
+                '默认两类都允许；关闭某一类后会自动写入对应的 excluded-models 通配规则。这里只限制客户端传入的模型名，不影响后续路由与 failover 目标；额外自定义排除项会继续保留。',
             })}
           </div>
 
-          <div className={styles.modelList}>
-            {claudeModels.length === 0 ? (
-              <div className={styles.hint}>
-                {t('api_key_policies.loading_models', { defaultValue: '模型列表为空' })}
+          <div className={styles.section}>
+            <div className={styles.fieldRow}>
+              <div className={styles.fieldText}>
+                <div className={styles.fieldLabel}>
+                  {t('api_key_policies.category_claude', { defaultValue: 'Claude 系列' })}
+                </div>
+                <div className={styles.fieldHint}>
+                  {t('api_key_policies.category_claude_hint', {
+                    defaultValue: '对应 excluded-models: claude-*',
+                  })}
+                </div>
               </div>
-            ) : (
-              claudeModels.map((m) => {
-                const denied = excludedExact.has(m.id);
-                const allowed = !denied;
-                return (
-                  <label key={m.id} className={styles.modelItem}>
-                    <input
-                      type="checkbox"
-                      checked={allowed}
-                      disabled={disableControls || !selectedKey}
-                      onChange={(e) => toggleModelAllowed(m.id, e.target.checked)}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div className={styles.modelId}>{m.id}</div>
-                      {m.display_name ? <div className={styles.hint}>{m.display_name}</div> : null}
-                    </div>
-                  </label>
-                );
-              })
-            )}
+              <ToggleSwitch
+                checked={allowClaudeCategory}
+                onChange={(value) => toggleCategoryAllowed('claude', value)}
+                disabled={disableControls || !selectedKey}
+                ariaLabel={t('api_key_policies.category_claude', {
+                  defaultValue: 'Claude 系列',
+                })}
+              />
+            </div>
+
+            <div className={styles.fieldRow}>
+              <div className={styles.fieldText}>
+                <div className={styles.fieldLabel}>
+                  {t('api_key_policies.category_chatgpt', { defaultValue: 'ChatGPT / GPT 系列' })}
+                </div>
+                <div className={styles.fieldHint}>
+                  {t('api_key_policies.category_chatgpt_hint', {
+                    defaultValue: '对应 excluded-models: gpt-*, chatgpt-*, o1*, o3*, o4*',
+                  })}
+                </div>
+              </div>
+              <ToggleSwitch
+                checked={allowChatGPTCategory}
+                onChange={(value) => toggleCategoryAllowed('chatgpt', value)}
+                disabled={disableControls || !selectedKey}
+                ariaLabel={t('api_key_policies.category_chatgpt', {
+                  defaultValue: 'ChatGPT / GPT 系列',
+                })}
+              />
+            </div>
           </div>
 
           {excludedCustom.length > 0 ? (
             <div className={styles.hint}>
               {t('api_key_policies.custom_excluded', {
-                defaultValue: '已存在通配/未知模型排除项：',
+                defaultValue: '仍保留其他 excluded-models 项：',
               })}{' '}
               {excludedCustom.join(', ')}
             </div>

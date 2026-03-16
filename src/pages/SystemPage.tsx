@@ -56,6 +56,7 @@ export function SystemPage() {
   const [requestLogDraft, setRequestLogDraft] = useState(false);
   const [requestLogTouched, setRequestLogTouched] = useState(false);
   const [requestLogSaving, setRequestLogSaving] = useState(false);
+  const [claudeRoutingSaving, setClaudeRoutingSaving] = useState(false);
 
   const apiKeysCache = useRef<string[]>([]);
   const versionTapCount = useRef(0);
@@ -67,8 +68,10 @@ export function SystemPage() {
   );
   const groupedModels = useMemo(() => classifyModels(models, { otherLabel }), [models, otherLabel]);
   const requestLogEnabled = config?.requestLog ?? false;
+  const claudeToGptRoutingEnabled = config?.claudeToGptRoutingEnabled ?? false;
   const requestLogDirty = requestLogDraft !== requestLogEnabled;
   const canEditRequestLog = auth.connectionStatus === 'connected' && Boolean(config);
+  const canEditClaudeRouting = auth.connectionStatus === 'connected' && Boolean(config) && !claudeRoutingSaving;
 
   const appVersion = __APP_VERSION__ || t('system_info.version_unknown');
   const apiVersion = auth.serverVersion || t('system_info.version_unknown');
@@ -183,6 +186,35 @@ export function SystemPage() {
         showNotification(t('notification.login_storage_cleared'), 'success');
       },
     });
+  };
+
+  const handleClaudeRoutingToggle = async (enabled: boolean) => {
+    if (!config) return;
+
+    const previous = claudeToGptRoutingEnabled;
+    setClaudeRoutingSaving(true);
+    updateConfigValue('claude-to-gpt-routing-enabled', enabled);
+
+    try {
+      await configApi.updateClaudeToGptRoutingEnabled(enabled);
+      clearCache('claude-to-gpt-routing-enabled');
+      showNotification(
+        t('notification.claude_to_gpt_routing_updated', {
+          defaultValue: 'Claude 全局转 GPT 设置已更新',
+        }),
+        'success'
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+      updateConfigValue('claude-to-gpt-routing-enabled', previous);
+      showNotification(
+        `${t('notification.update_failed')}${message ? `: ${message}` : ''}`,
+        'error'
+      );
+    } finally {
+      setClaudeRoutingSaving(false);
+    }
   };
 
   const openRequestLogModal = useCallback(() => {
@@ -425,6 +457,36 @@ export function SystemPage() {
           <Button variant="danger" onClick={handleClearLoginStorage}>
             {t('system_info.clear_login_button')}
           </Button>
+        </div>
+      </Card>
+
+      <Card
+        title={t('system_info.claude_to_gpt_title', {
+          defaultValue: 'Claude 请求全局转 GPT',
+        })}
+      >
+        <p className={styles.sectionDescription}>
+          {t('system_info.claude_to_gpt_desc', {
+            defaultValue:
+              '开启后，所有客户端 API Key 发起的 Claude 模型请求都会默认改走 GPT。Opus 默认转 gpt-5.4(high)，其他 Claude 默认转 gpt-5.4(medium)。',
+          })}
+        </p>
+        <ToggleSwitch
+          label={t('system_info.claude_to_gpt_toggle', {
+            defaultValue: '启用全局 Claude 转 GPT',
+          })}
+          labelPosition="left"
+          checked={claudeToGptRoutingEnabled}
+          disabled={!canEditClaudeRouting}
+          onChange={(value) => {
+            void handleClaudeRoutingToggle(value);
+          }}
+        />
+        <div className="hint">
+          {t('system_info.claude_to_gpt_hint', {
+            defaultValue:
+              '如需让某个 API Key 继续使用 Claude，请到“API Key 策略”页面为该 Key 打开“启用 Claude 模型”。',
+          })}
         </div>
       </Card>
       </div>

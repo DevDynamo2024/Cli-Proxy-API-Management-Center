@@ -271,6 +271,9 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
   const proxyUrl = raw['proxy-url'] ?? raw.proxyUrl;
   config.proxyUrl =
     typeof proxyUrl === 'string' ? proxyUrl : proxyUrl === undefined || proxyUrl === null ? undefined : String(proxyUrl);
+  config.claudeToGptRoutingEnabled = normalizeBoolean(
+    raw['claude-to-gpt-routing-enabled'] ?? raw.claudeToGptRoutingEnabled
+  );
 
   const anthropicBaseUrl = raw['anthropic-base-url'] ?? raw.anthropicBaseUrl;
   config.anthropicBaseUrl =

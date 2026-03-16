@@ -15,9 +15,25 @@ export interface ModelPricesResponse {
   prices?: ModelPriceApiItem[];
 }
 
+export interface ModelPricesExportPayload {
+  version?: number;
+  exported_at?: string;
+  prices?: ModelPriceApiItem[];
+}
+
+export interface ModelPricesImportResponse {
+  imported?: number;
+  saved_total?: number;
+}
+
 export const modelPricesApi = {
   getModelPrices: () =>
     apiClient.get<ModelPricesResponse>('/model-prices', { timeout: MODEL_PRICES_TIMEOUT_MS }),
+
+  exportModelPrices: () =>
+    apiClient.get<ModelPricesExportPayload>('/model-prices/export', {
+      timeout: MODEL_PRICES_TIMEOUT_MS
+    }),
 
   putModelPrice: (payload: {
     model: string;
@@ -28,6 +44,11 @@ export const modelPricesApi = {
 
   deleteModelPrice: (model: string) =>
     apiClient.delete(`/model-prices?model=${encodeURIComponent(model)}`, {
+      timeout: MODEL_PRICES_TIMEOUT_MS
+    }),
+
+  importModelPrices: (payload: unknown) =>
+    apiClient.post<ModelPricesImportResponse>('/model-prices/import', payload, {
       timeout: MODEL_PRICES_TIMEOUT_MS
     })
 };

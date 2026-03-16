@@ -14,6 +14,7 @@ export interface QuotaExceededConfig {
 export interface Config {
   debug?: boolean;
   proxyUrl?: string;
+  claudeToGptRoutingEnabled?: boolean;
   anthropicBaseUrl?: string;
   anthropicOAuthTokenUrl?: string;
   requestRetry?: number;
@@ -39,6 +40,7 @@ export interface Config {
 export type RawConfigSection =
   | 'debug'
   | 'proxy-url'
+  | 'claude-to-gpt-routing-enabled'
   | 'anthropic-base-url'
   | 'anthropic-oauth-token-url'
   | 'request-retry'

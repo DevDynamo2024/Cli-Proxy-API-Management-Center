@@ -4,7 +4,7 @@
 
 import { apiClient } from './client';
 
-const DEFAULT_CLAUDE_FAILOVER_TARGET_MODEL = 'gpt-5.4(high)';
+const DEFAULT_CLAUDE_FAILOVER_TARGET_MODEL = 'gpt-5.4(medium)';
 
 export interface ModelFailoverRule {
   fromModel: string;
@@ -27,6 +27,7 @@ export interface ApiKeyPolicy {
   dailyLimits: Record<string, number>;
   dailyBudgetUsd: number;
   weeklyBudgetUsd: number;
+  weeklyBudgetAnchorAt: string;
   modelRoutingRules: ModelRoutingRule[];
   claudeFailoverEnabled: boolean;
   claudeFailoverTargetModel: string;
@@ -41,6 +42,7 @@ type ApiKeyPolicyDTO = {
   'daily-limits'?: unknown;
   'daily-budget-usd'?: unknown;
   'weekly-budget-usd'?: unknown;
+  'weekly-budget-anchor-at'?: unknown;
   'model-routing'?: unknown;
   failover?: unknown;
 };
@@ -101,6 +103,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
         ? weeklyBudgetRaw
         : 0
       : Math.max(0, Number(String(weeklyBudgetRaw ?? '')) || 0);
+  const weeklyBudgetAnchorAt = String(dto['weekly-budget-anchor-at'] ?? '').trim();
 
   const failoverRaw = dto.failover;
   let claudeFailoverEnabled = false;
@@ -181,6 +184,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     dailyLimits,
     dailyBudgetUsd,
     weeklyBudgetUsd,
+    weeklyBudgetAnchorAt,
     modelRoutingRules,
     claudeFailoverEnabled,
     claudeFailoverTargetModel,
@@ -224,6 +228,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     'daily-limits': policy.dailyLimits,
     'daily-budget-usd': policy.dailyBudgetUsd,
     'weekly-budget-usd': policy.weeklyBudgetUsd,
+    'weekly-budget-anchor-at': String(policy.weeklyBudgetAnchorAt ?? '').trim(),
     'model-routing': { rules: routingRules },
     failover: {
       claude: {

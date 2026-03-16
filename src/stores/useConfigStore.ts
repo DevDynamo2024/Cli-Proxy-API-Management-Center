@@ -36,6 +36,7 @@ let inFlightConfigRequest: { id: number; promise: Promise<Config> } | null = nul
 const SECTION_KEYS: RawConfigSection[] = [
   'debug',
   'proxy-url',
+  'claude-to-gpt-routing-enabled',
   'request-retry',
   'quota-exceeded',
   'usage-statistics-enabled',
@@ -62,6 +63,8 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
       return config.debug;
     case 'proxy-url':
       return config.proxyUrl;
+    case 'claude-to-gpt-routing-enabled':
+      return config.claudeToGptRoutingEnabled;
     case 'request-retry':
       return config.requestRetry;
     case 'quota-exceeded':
@@ -195,6 +198,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           break;
         case 'proxy-url':
           nextConfig.proxyUrl = value as Config['proxyUrl'];
+          break;
+        case 'claude-to-gpt-routing-enabled':
+          nextConfig.claudeToGptRoutingEnabled = value as Config['claudeToGptRoutingEnabled'];
           break;
         case 'request-retry':
           nextConfig.requestRetry = value as Config['requestRetry'];

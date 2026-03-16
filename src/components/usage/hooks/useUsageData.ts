@@ -32,8 +32,14 @@ export interface UseUsageDataReturn {
   handleImport: () => void;
   handleImportChange: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   importInputRef: React.RefObject<HTMLInputElement | null>;
+  handleModelPricesExport: () => Promise<void>;
+  handleModelPricesImport: () => void;
+  handleModelPricesImportChange: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
+  modelPricesImportInputRef: React.RefObject<HTMLInputElement | null>;
   exporting: boolean;
   importing: boolean;
+  modelPricesExporting: boolean;
+  modelPricesImporting: boolean;
 }
 
 export function useUsageData(range: UsageTimeRange): UseUsageDataReturn {
@@ -47,7 +53,10 @@ export function useUsageData(range: UsageTimeRange): UseUsageDataReturn {
   const [savedModelPrices, setSavedModelPrices] = useState<Record<string, ModelPrice>>({});
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [modelPricesExporting, setModelPricesExporting] = useState(false);
+  const [modelPricesImporting, setModelPricesImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const modelPricesImportInputRef = useRef<HTMLInputElement | null>(null);
   const savedModelPricesRef = useRef<Record<string, ModelPrice>>({});
 
   const applyModelPrices = useCallback((items: ModelPriceApiItem[] | undefined) => {
@@ -206,6 +215,87 @@ export function useUsageData(range: UsageTimeRange): UseUsageDataReturn {
     }
   };
 
+  const handleModelPricesExport = async () => {
+    setModelPricesExporting(true);
+    try {
+      const data = await modelPricesApi.exportModelPrices();
+      const exportedAt =
+        typeof data?.exported_at === 'string' ? new Date(data.exported_at) : new Date();
+      const safeTimestamp = Number.isNaN(exportedAt.getTime())
+        ? new Date().toISOString()
+        : exportedAt.toISOString();
+      const filename = `model-prices-export-${safeTimestamp.replace(/[:.]/g, '-')}.json`;
+      const blob = new Blob([JSON.stringify(data ?? {}, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      showNotification(
+        t('usage_stats.model_price_export_success', { defaultValue: '模型价格导出成功' }),
+        'success'
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      showNotification(
+        `${t('notification.download_failed')}${message ? `: ${message}` : ''}`,
+        'error'
+      );
+    } finally {
+      setModelPricesExporting(false);
+    }
+  };
+
+  const handleModelPricesImport = () => {
+    modelPricesImportInputRef.current?.click();
+  };
+
+  const handleModelPricesImportChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setModelPricesImporting(true);
+    try {
+      const text = await file.text();
+      let payload: unknown;
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        showNotification(
+          t('usage_stats.model_price_import_invalid', {
+            defaultValue: '模型价格导入文件格式无效',
+          }),
+          'error'
+        );
+        return;
+      }
+
+      const result = await modelPricesApi.importModelPrices(payload);
+      await loadModelPricesFromServer();
+      await loadDashboard();
+      showNotification(
+        t('usage_stats.model_price_import_success', {
+          defaultValue: '模型价格导入成功：新增/更新 {{imported}} 条，当前共 {{total}} 条持久化价格',
+          imported: result?.imported ?? 0,
+          total: result?.saved_total ?? 0,
+        }),
+        'success'
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      showNotification(
+        `${t('notification.upload_failed')}${message ? `: ${message}` : ''}`,
+        'error'
+      );
+    } finally {
+      setModelPricesImporting(false);
+    }
+  };
+
   const handleSetModelPrices = useCallback(
     (prices: Record<string, ModelPrice>) => {
       const current = savedModelPricesRef.current;
@@ -275,7 +365,13 @@ export function useUsageData(range: UsageTimeRange): UseUsageDataReturn {
     handleImport,
     handleImportChange,
     importInputRef,
+    handleModelPricesExport,
+    handleModelPricesImport,
+    handleModelPricesImportChange,
+    modelPricesImportInputRef,
     exporting,
-    importing
+    importing,
+    modelPricesExporting,
+    modelPricesImporting
   };
 }

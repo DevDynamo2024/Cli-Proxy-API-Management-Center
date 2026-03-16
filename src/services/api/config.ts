@@ -36,6 +36,12 @@ export const configApi = {
   clearProxyUrl: () => apiClient.delete('/proxy-url'),
 
   /**
+   * Claude 模型全局转 GPT 开关
+   */
+  updateClaudeToGptRoutingEnabled: (enabled: boolean) =>
+    apiClient.put('/claude-to-gpt-routing-enabled', { value: enabled }),
+
+  /**
    * 更新重试次数
    */
   updateRequestRetry: (retryCount: number) => apiClient.put('/request-retry', { value: retryCount }),

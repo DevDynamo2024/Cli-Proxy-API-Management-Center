@@ -11,13 +11,25 @@ export interface PriceSettingsCardProps {
   modelPrices: Record<string, ModelPrice>;
   savedModelPrices: Record<string, ModelPrice>;
   onPricesChange: (prices: Record<string, ModelPrice>) => void;
+  onExport: () => Promise<void>;
+  onImport: () => void;
+  onImportChange: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
+  importInputRef: React.RefObject<HTMLInputElement | null>;
+  exporting: boolean;
+  importing: boolean;
 }
 
 export function PriceSettingsCard({
   modelNames,
   modelPrices,
   savedModelPrices,
-  onPricesChange
+  onPricesChange,
+  onExport,
+  onImport,
+  onImportChange,
+  importInputRef,
+  exporting,
+  importing
 }: PriceSettingsCardProps) {
   const { t } = useTranslation();
 
@@ -68,8 +80,27 @@ export function PriceSettingsCard({
   };
 
   return (
-    <Card title={t('usage_stats.model_price_settings')}>
+    <Card
+      title={t('usage_stats.model_price_settings')}
+      extra={
+        <div className={styles.headerActions}>
+          <Button variant="secondary" size="sm" onClick={onExport} loading={exporting} disabled={importing}>
+            {t('usage_stats.export', { defaultValue: '导出' })}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onImport} loading={importing} disabled={exporting}>
+            {t('usage_stats.import', { defaultValue: '导入' })}
+          </Button>
+        </div>
+      }
+    >
       <div className={styles.pricingSection}>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".json,application/json"
+          style={{ display: 'none' }}
+          onChange={onImportChange}
+        />
         {/* Price Form */}
         <div className={styles.priceForm}>
           <div className={styles.formRow}>
