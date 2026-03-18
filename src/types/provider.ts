@@ -26,6 +26,7 @@ export interface GeminiKeyConfig {
 
 export interface ProviderKeyConfig {
   apiKey: string;
+  fastMode?: boolean;
   prefix?: string;
   baseUrl?: string;
   proxyUrl?: string;
