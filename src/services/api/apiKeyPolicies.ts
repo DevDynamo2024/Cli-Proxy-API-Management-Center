@@ -23,6 +23,7 @@ export interface ApiKeyPolicy {
   apiKey: string;
   upstreamBaseUrl: string;
   excludedModels: string[];
+  enableClaudeOpus1M: boolean;
   allowClaudeOpus46: boolean;
   dailyLimits: Record<string, number>;
   dailyBudgetUsd: number;
@@ -38,6 +39,7 @@ export type ApiKeyPolicyDTO = {
   'api-key': string;
   'upstream-base-url'?: unknown;
   'excluded-models'?: unknown;
+  'enable-claude-opus-1m'?: unknown;
   'allow-claude-opus-4-6'?: unknown;
   'daily-limits'?: unknown;
   'daily-budget-usd'?: unknown;
@@ -108,6 +110,13 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   const allowRaw = dto['allow-claude-opus-4-6'];
   const allowClaudeOpus46 =
     typeof allowRaw === 'boolean' ? allowRaw : allowRaw == null ? true : Boolean(allowRaw);
+  const enableClaudeOpus1MRaw = dto['enable-claude-opus-1m'];
+  const enableClaudeOpus1M =
+    typeof enableClaudeOpus1MRaw === 'boolean'
+      ? enableClaudeOpus1MRaw
+      : enableClaudeOpus1MRaw == null
+        ? false
+        : Boolean(enableClaudeOpus1MRaw);
 
   const limitsRaw = dto['daily-limits'];
   const dailyLimits: Record<string, number> = {};
@@ -211,6 +220,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
     apiKey,
     upstreamBaseUrl,
     excludedModels,
+    enableClaudeOpus1M,
     allowClaudeOpus46,
     dailyLimits,
     dailyBudgetUsd,
@@ -231,6 +241,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
     'api-key': policy.apiKey,
     'upstream-base-url': String(policy.upstreamBaseUrl ?? '').trim(),
     'excluded-models': policy.excludedModels,
+    'enable-claude-opus-1m': policy.enableClaudeOpus1M,
     'allow-claude-opus-4-6': policy.allowClaudeOpus46,
     'daily-limits': policy.dailyLimits,
     'daily-budget-usd': policy.dailyBudgetUsd,

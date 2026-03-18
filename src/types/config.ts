@@ -15,6 +15,7 @@ export interface Config {
   debug?: boolean;
   proxyUrl?: string;
   claudeToGptRoutingEnabled?: boolean;
+  disableClaudeOpus1M?: boolean;
   anthropicBaseUrl?: string;
   anthropicOAuthTokenUrl?: string;
   requestRetry?: number;
@@ -41,6 +42,7 @@ export type RawConfigSection =
   | 'debug'
   | 'proxy-url'
   | 'claude-to-gpt-routing-enabled'
+  | 'disable-claude-opus-1m'
   | 'anthropic-base-url'
   | 'anthropic-oauth-token-url'
   | 'request-retry'

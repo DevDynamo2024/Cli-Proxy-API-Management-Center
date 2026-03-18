@@ -5,7 +5,13 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { IconGithub, IconBookOpen, IconExternalLink, IconCode } from '@/components/ui/icons';
-import { useAuthStore, useConfigStore, useNotificationStore, useModelsStore, useThemeStore } from '@/stores';
+import {
+  useAuthStore,
+  useConfigStore,
+  useNotificationStore,
+  useModelsStore,
+  useThemeStore,
+} from '@/stores';
 import { configApi } from '@/services/api';
 import { apiKeysApi } from '@/services/api/apiKeys';
 import { classifyModels } from '@/utils/models';
@@ -51,12 +57,16 @@ export function SystemPage() {
   const modelsError = useModelsStore((state) => state.error);
   const fetchModelsFromStore = useModelsStore((state) => state.fetchModels);
 
-  const [modelStatus, setModelStatus] = useState<{ type: 'success' | 'warning' | 'error' | 'muted'; message: string }>();
+  const [modelStatus, setModelStatus] = useState<{
+    type: 'success' | 'warning' | 'error' | 'muted';
+    message: string;
+  }>();
   const [requestLogModalOpen, setRequestLogModalOpen] = useState(false);
   const [requestLogDraft, setRequestLogDraft] = useState(false);
   const [requestLogTouched, setRequestLogTouched] = useState(false);
   const [requestLogSaving, setRequestLogSaving] = useState(false);
   const [claudeRoutingSaving, setClaudeRoutingSaving] = useState(false);
+  const [claudeOpus1MSaving, setClaudeOpus1MSaving] = useState(false);
 
   const apiKeysCache = useRef<string[]>([]);
   const versionTapCount = useRef(0);
@@ -69,9 +79,13 @@ export function SystemPage() {
   const groupedModels = useMemo(() => classifyModels(models, { otherLabel }), [models, otherLabel]);
   const requestLogEnabled = config?.requestLog ?? false;
   const claudeToGptRoutingEnabled = config?.claudeToGptRoutingEnabled ?? false;
+  const disableClaudeOpus1M = config?.disableClaudeOpus1M ?? false;
   const requestLogDirty = requestLogDraft !== requestLogEnabled;
   const canEditRequestLog = auth.connectionStatus === 'connected' && Boolean(config);
-  const canEditClaudeRouting = auth.connectionStatus === 'connected' && Boolean(config) && !claudeRoutingSaving;
+  const canEditClaudeRouting =
+    auth.connectionStatus === 'connected' && Boolean(config) && !claudeRoutingSaving;
+  const canEditClaudeOpus1M =
+    auth.connectionStatus === 'connected' && Boolean(config) && !claudeOpus1MSaving;
 
   const appVersion = __APP_VERSION__ || t('system_info.version_unknown');
   const apiVersion = auth.serverVersion || t('system_info.version_unknown');
@@ -139,7 +153,7 @@ export function SystemPage() {
     if (auth.connectionStatus !== 'connected') {
       setModelStatus({
         type: 'warning',
-        message: t('notification.connection_required')
+        message: t('notification.connection_required'),
       });
       return;
     }
@@ -161,11 +175,12 @@ export function SystemPage() {
       const hasModels = list.length > 0;
       setModelStatus({
         type: hasModels ? 'success' : 'warning',
-        message: hasModels ? t('system_info.models_count', { count: list.length }) : t('system_info.models_empty')
+        message: hasModels
+          ? t('system_info.models_count', { count: list.length })
+          : t('system_info.models_empty'),
       });
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+      const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
       const suffix = message ? `: ${message}` : '';
       const text = `${t('system_info.models_error')}${suffix}`;
       setModelStatus({ type: 'error', message: text });
@@ -214,6 +229,35 @@ export function SystemPage() {
       );
     } finally {
       setClaudeRoutingSaving(false);
+    }
+  };
+
+  const handleClaudeOpus1MToggle = async (enabled: boolean) => {
+    if (!config) return;
+
+    const previous = disableClaudeOpus1M;
+    setClaudeOpus1MSaving(true);
+    updateConfigValue('disable-claude-opus-1m', enabled);
+
+    try {
+      await configApi.updateDisableClaudeOpus1M(enabled);
+      clearCache('disable-claude-opus-1m');
+      showNotification(
+        t('notification.claude_opus_1m_updated', {
+          defaultValue: 'Claude Opus 1M 默认策略已更新',
+        }),
+        'success'
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+      updateConfigValue('disable-claude-opus-1m', previous);
+      showNotification(
+        `${t('notification.update_failed')}${message ? `: ${message}` : ''}`,
+        'error'
+      );
+    } finally {
+      setClaudeOpus1MSaving(false);
     }
   };
 
@@ -305,190 +349,229 @@ export function SystemPage() {
     <div className={styles.container}>
       <h1 className={styles.pageTitle}>{t('system_info.title')}</h1>
       <div className={styles.content}>
-      <Card className={styles.aboutCard}>
-        <div className={styles.aboutHeader}>
-          <img src={INLINE_LOGO_JPEG} alt="CPAMC" className={styles.aboutLogo} />
-          <div className={styles.aboutTitle}>{t('system_info.about_title')}</div>
-        </div>
-
-        <div className={styles.aboutInfoGrid}>
-          <button
-            type="button"
-            className={`${styles.infoTile} ${styles.tapTile}`}
-            onClick={handleInfoVersionTap}
-          >
-            <div className={styles.tileLabel}>{t('footer.version')}</div>
-            <div className={styles.tileValue}>{appVersion}</div>
-          </button>
-
-          <div className={styles.infoTile}>
-            <div className={styles.tileLabel}>{t('footer.api_version')}</div>
-            <div className={styles.tileValue}>{apiVersion}</div>
+        <Card className={styles.aboutCard}>
+          <div className={styles.aboutHeader}>
+            <img src={INLINE_LOGO_JPEG} alt="CPAMC" className={styles.aboutLogo} />
+            <div className={styles.aboutTitle}>{t('system_info.about_title')}</div>
           </div>
 
-          <div className={styles.infoTile}>
-            <div className={styles.tileLabel}>{t('footer.build_date')}</div>
-            <div className={styles.tileValue}>{buildTime}</div>
+          <div className={styles.aboutInfoGrid}>
+            <button
+              type="button"
+              className={`${styles.infoTile} ${styles.tapTile}`}
+              onClick={handleInfoVersionTap}
+            >
+              <div className={styles.tileLabel}>{t('footer.version')}</div>
+              <div className={styles.tileValue}>{appVersion}</div>
+            </button>
+
+            <div className={styles.infoTile}>
+              <div className={styles.tileLabel}>{t('footer.api_version')}</div>
+              <div className={styles.tileValue}>{apiVersion}</div>
+            </div>
+
+            <div className={styles.infoTile}>
+              <div className={styles.tileLabel}>{t('footer.build_date')}</div>
+              <div className={styles.tileValue}>{buildTime}</div>
+            </div>
+
+            <div className={styles.infoTile}>
+              <div className={styles.tileLabel}>{t('connection.status')}</div>
+              <div className={styles.tileValue}>{t(`common.${auth.connectionStatus}_status`)}</div>
+              <div className={styles.tileSub}>{auth.apiBase || '-'}</div>
+            </div>
           </div>
 
-	          <div className={styles.infoTile}>
-	            <div className={styles.tileLabel}>{t('connection.status')}</div>
-	            <div className={styles.tileValue}>{t(`common.${auth.connectionStatus}_status`)}</div>
-	            <div className={styles.tileSub}>{auth.apiBase || '-'}</div>
-	          </div>
-        </div>
+          <div className={styles.aboutActions}>
+            <Button variant="secondary" size="sm" onClick={() => fetchConfig(undefined, true)}>
+              {t('common.refresh')}
+            </Button>
+          </div>
+        </Card>
 
-        <div className={styles.aboutActions}>
-          <Button variant="secondary" size="sm" onClick={() => fetchConfig(undefined, true)}>
-            {t('common.refresh')}
-          </Button>
-        </div>
-      </Card>
-
-      <Card title={t('system_info.quick_links_title')}>
-        <p className={styles.sectionDescription}>{t('system_info.quick_links_desc')}</p>
-        <div className={styles.quickLinks}>
-          <a
-            href="https://github.com/router-for-me/CLIProxyAPI"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.linkCard}
-          >
-            <div className={`${styles.linkIcon} ${styles.github}`}>
-              <IconGithub size={22} />
-            </div>
-            <div className={styles.linkContent}>
-              <div className={styles.linkTitle}>
-                {t('system_info.link_main_repo')}
-                <IconExternalLink size={14} />
+        <Card title={t('system_info.quick_links_title')}>
+          <p className={styles.sectionDescription}>{t('system_info.quick_links_desc')}</p>
+          <div className={styles.quickLinks}>
+            <a
+              href="https://github.com/router-for-me/CLIProxyAPI"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.linkCard}
+            >
+              <div className={`${styles.linkIcon} ${styles.github}`}>
+                <IconGithub size={22} />
               </div>
-              <div className={styles.linkDesc}>{t('system_info.link_main_repo_desc')}</div>
-            </div>
-          </a>
-
-          <a
-            href="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.linkCard}
-          >
-            <div className={`${styles.linkIcon} ${styles.github}`}>
-              <IconCode size={22} />
-            </div>
-            <div className={styles.linkContent}>
-              <div className={styles.linkTitle}>
-                {t('system_info.link_webui_repo')}
-                <IconExternalLink size={14} />
-              </div>
-              <div className={styles.linkDesc}>{t('system_info.link_webui_repo_desc')}</div>
-            </div>
-          </a>
-
-          <a
-            href="https://help.router-for.me/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.linkCard}
-          >
-            <div className={`${styles.linkIcon} ${styles.docs}`}>
-              <IconBookOpen size={22} />
-            </div>
-            <div className={styles.linkContent}>
-              <div className={styles.linkTitle}>
-                {t('system_info.link_docs')}
-                <IconExternalLink size={14} />
-              </div>
-              <div className={styles.linkDesc}>{t('system_info.link_docs_desc')}</div>
-            </div>
-          </a>
-        </div>
-      </Card>
-
-      <Card
-        title={t('system_info.models_title')}
-        extra={
-          <Button variant="secondary" size="sm" onClick={() => fetchModels({ forceRefresh: true })} loading={modelsLoading}>
-            {t('common.refresh')}
-          </Button>
-        }
-      >
-        <p className={styles.sectionDescription}>{t('system_info.models_desc')}</p>
-        {modelStatus && <div className={`status-badge ${modelStatus.type}`}>{modelStatus.message}</div>}
-        {modelsError && <div className="error-box">{modelsError}</div>}
-        {modelsLoading ? (
-          <div className="hint">{t('common.loading')}</div>
-        ) : models.length === 0 ? (
-          <div className="hint">{t('system_info.models_empty')}</div>
-        ) : (
-          <div className="item-list">
-            {groupedModels.map((group) => {
-              const iconSrc = getIconForCategory(group.id);
-              return (
-                <div key={group.id} className="item-row">
-                  <div className="item-meta">
-                    <div className={styles.groupTitle}>
-                      {iconSrc && <img src={iconSrc} alt="" className={styles.groupIcon} />}
-                      <span className="item-title">{group.label}</span>
-                    </div>
-                    <div className="item-subtitle">{t('system_info.models_count', { count: group.items.length })}</div>
-                  </div>
-                  <div className={styles.modelTags}>
-                    {group.items.map((model) => (
-                      <span
-                        key={`${model.name}-${model.alias ?? 'default'}`}
-                        className={styles.modelTag}
-                        title={model.description || ''}
-                      >
-                        <span className={styles.modelName}>{model.name}</span>
-                        {model.alias && <span className={styles.modelAlias}>{model.alias}</span>}
-                      </span>
-                    ))}
-                  </div>
+              <div className={styles.linkContent}>
+                <div className={styles.linkTitle}>
+                  {t('system_info.link_main_repo')}
+                  <IconExternalLink size={14} />
                 </div>
-              );
+                <div className={styles.linkDesc}>{t('system_info.link_main_repo_desc')}</div>
+              </div>
+            </a>
+
+            <a
+              href="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.linkCard}
+            >
+              <div className={`${styles.linkIcon} ${styles.github}`}>
+                <IconCode size={22} />
+              </div>
+              <div className={styles.linkContent}>
+                <div className={styles.linkTitle}>
+                  {t('system_info.link_webui_repo')}
+                  <IconExternalLink size={14} />
+                </div>
+                <div className={styles.linkDesc}>{t('system_info.link_webui_repo_desc')}</div>
+              </div>
+            </a>
+
+            <a
+              href="https://help.router-for.me/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.linkCard}
+            >
+              <div className={`${styles.linkIcon} ${styles.docs}`}>
+                <IconBookOpen size={22} />
+              </div>
+              <div className={styles.linkContent}>
+                <div className={styles.linkTitle}>
+                  {t('system_info.link_docs')}
+                  <IconExternalLink size={14} />
+                </div>
+                <div className={styles.linkDesc}>{t('system_info.link_docs_desc')}</div>
+              </div>
+            </a>
+          </div>
+        </Card>
+
+        <Card
+          title={t('system_info.models_title')}
+          extra={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => fetchModels({ forceRefresh: true })}
+              loading={modelsLoading}
+            >
+              {t('common.refresh')}
+            </Button>
+          }
+        >
+          <p className={styles.sectionDescription}>{t('system_info.models_desc')}</p>
+          {modelStatus && (
+            <div className={`status-badge ${modelStatus.type}`}>{modelStatus.message}</div>
+          )}
+          {modelsError && <div className="error-box">{modelsError}</div>}
+          {modelsLoading ? (
+            <div className="hint">{t('common.loading')}</div>
+          ) : models.length === 0 ? (
+            <div className="hint">{t('system_info.models_empty')}</div>
+          ) : (
+            <div className="item-list">
+              {groupedModels.map((group) => {
+                const iconSrc = getIconForCategory(group.id);
+                return (
+                  <div key={group.id} className="item-row">
+                    <div className="item-meta">
+                      <div className={styles.groupTitle}>
+                        {iconSrc && <img src={iconSrc} alt="" className={styles.groupIcon} />}
+                        <span className="item-title">{group.label}</span>
+                      </div>
+                      <div className="item-subtitle">
+                        {t('system_info.models_count', { count: group.items.length })}
+                      </div>
+                    </div>
+                    <div className={styles.modelTags}>
+                      {group.items.map((model) => (
+                        <span
+                          key={`${model.name}-${model.alias ?? 'default'}`}
+                          className={styles.modelTag}
+                          title={model.description || ''}
+                        >
+                          <span className={styles.modelName}>{model.name}</span>
+                          {model.alias && <span className={styles.modelAlias}>{model.alias}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        <Card title={t('system_info.clear_login_title')}>
+          <p className={styles.sectionDescription}>{t('system_info.clear_login_desc')}</p>
+          <div className={styles.clearLoginActions}>
+            <Button variant="danger" onClick={handleClearLoginStorage}>
+              {t('system_info.clear_login_button')}
+            </Button>
+          </div>
+        </Card>
+
+        <Card
+          title={t('system_info.claude_to_gpt_title', {
+            defaultValue: 'Claude 请求全局转 GPT',
+          })}
+        >
+          <p className={styles.sectionDescription}>
+            {t('system_info.claude_to_gpt_desc', {
+              defaultValue:
+                '开启后，所有客户端 API Key 发起的 Claude 模型请求都会默认改走 GPT。Opus 默认转 gpt-5.4(high)，其他 Claude 默认转 gpt-5.4(medium)。',
+            })}
+          </p>
+          <ToggleSwitch
+            label={t('system_info.claude_to_gpt_toggle', {
+              defaultValue: '启用全局 Claude 转 GPT',
+            })}
+            labelPosition="left"
+            checked={claudeToGptRoutingEnabled}
+            disabled={!canEditClaudeRouting}
+            onChange={(value) => {
+              void handleClaudeRoutingToggle(value);
+            }}
+          />
+          <div className="hint">
+            {t('system_info.claude_to_gpt_hint', {
+              defaultValue:
+                '如需让某个 API Key 继续使用 Claude，请到“API Key 策略”页面为该 Key 打开“启用 Claude 模型”。',
             })}
           </div>
-        )}
-      </Card>
+        </Card>
 
-      <Card title={t('system_info.clear_login_title')}>
-        <p className={styles.sectionDescription}>{t('system_info.clear_login_desc')}</p>
-        <div className={styles.clearLoginActions}>
-          <Button variant="danger" onClick={handleClearLoginStorage}>
-            {t('system_info.clear_login_button')}
-          </Button>
-        </div>
-      </Card>
-
-      <Card
-        title={t('system_info.claude_to_gpt_title', {
-          defaultValue: 'Claude 请求全局转 GPT',
-        })}
-      >
-        <p className={styles.sectionDescription}>
-          {t('system_info.claude_to_gpt_desc', {
-            defaultValue:
-              '开启后，所有客户端 API Key 发起的 Claude 模型请求都会默认改走 GPT。Opus 默认转 gpt-5.4(high)，其他 Claude 默认转 gpt-5.4(medium)。',
+        <Card
+          title={t('system_info.disable_claude_opus_1m_title', {
+            defaultValue: '默认禁用 Claude Opus 1M',
           })}
-        </p>
-        <ToggleSwitch
-          label={t('system_info.claude_to_gpt_toggle', {
-            defaultValue: '启用全局 Claude 转 GPT',
-          })}
-          labelPosition="left"
-          checked={claudeToGptRoutingEnabled}
-          disabled={!canEditClaudeRouting}
-          onChange={(value) => {
-            void handleClaudeRoutingToggle(value);
-          }}
-        />
-        <div className="hint">
-          {t('system_info.claude_to_gpt_hint', {
-            defaultValue:
-              '如需让某个 API Key 继续使用 Claude，请到“API Key 策略”页面为该 Key 打开“启用 Claude 模型”。',
-          })}
-        </div>
-      </Card>
+        >
+          <p className={styles.sectionDescription}>
+            {t('system_info.disable_claude_opus_1m_desc', {
+              defaultValue:
+                '开启后，客户端 API Key 的 Claude 请求会默认去掉 Opus 1M 信号（包括自定义 1M 头与 context-1m beta），普通 Opus 4.6 仍可使用。',
+            })}
+          </p>
+          <ToggleSwitch
+            label={t('system_info.disable_claude_opus_1m_toggle', {
+              defaultValue: '启用全局 Opus 1M 禁用策略',
+            })}
+            labelPosition="left"
+            checked={disableClaudeOpus1M}
+            disabled={!canEditClaudeOpus1M}
+            onChange={(value) => {
+              void handleClaudeOpus1MToggle(value);
+            }}
+          />
+          <div className="hint">
+            {t('system_info.disable_claude_opus_1m_hint', {
+              defaultValue:
+                '如需让某个 API Key 继续使用 Opus 1M，请到“API Key 策略”页面为该 Key 打开“允许 Opus 1M（覆盖全局）”。',
+            })}
+          </div>
+        </Card>
       </div>
 
       <Modal

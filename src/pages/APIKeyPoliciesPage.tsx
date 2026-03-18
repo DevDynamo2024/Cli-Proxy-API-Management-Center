@@ -24,10 +24,7 @@ import type {
   ModelFailoverRule,
   ModelRoutingRule,
 } from '@/services/api/apiKeyPolicies';
-import {
-  toModelFailoverRuleDTOs,
-  toModelRoutingRuleDTOs,
-} from '@/services/api/apiKeyPolicies';
+import { toModelFailoverRuleDTOs, toModelRoutingRuleDTOs } from '@/services/api/apiKeyPolicies';
 import styles from './APIKeyPoliciesPage.module.scss';
 
 type ModelDef = { id: string; display_name?: string };
@@ -57,7 +54,9 @@ function uniqStrings(list: string[]): string[] {
 }
 
 function normalizeModelPattern(value: string): string {
-  return String(value ?? '').trim().toLowerCase();
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
 }
 
 function hasManagedCategoryPattern(list: string[], patterns: readonly string[]): boolean {
@@ -230,6 +229,7 @@ export function APIKeyPoliciesPage() {
     return 'basic';
   });
   const [enableClaudeModels, setEnableClaudeModels] = useState(false);
+  const [enableClaudeOpus1M, setEnableClaudeOpus1M] = useState(false);
   const [allowOpus46, setAllowOpus46] = useState(true);
   const [opus46DailyLimit, setOpus46DailyLimit] = useState('');
   const [dailyBudgetEnabled, setDailyBudgetEnabled] = useState(false);
@@ -341,6 +341,7 @@ export function APIKeyPoliciesPage() {
       ({
         apiKey: key,
         enableClaudeModels: false,
+        enableClaudeOpus1M: false,
         upstreamBaseUrl: '',
         excludedModels: [],
         allowClaudeOpus46: true,
@@ -355,6 +356,7 @@ export function APIKeyPoliciesPage() {
       } as ApiKeyPolicy);
 
     setEnableClaudeModels(Boolean(p.enableClaudeModels));
+    setEnableClaudeOpus1M(Boolean(p.enableClaudeOpus1M));
     setAllowOpus46(p.allowClaudeOpus46 ?? true);
     setClaudeFailoverEnabled(Boolean(p.claudeFailoverEnabled));
     setClaudeFailoverTargetModel(
@@ -369,7 +371,9 @@ export function APIKeyPoliciesPage() {
     setDailyBudgetUsd(formatBudgetValue(Number(p.dailyBudgetUsd ?? 0)));
     setWeeklyBudgetEnabled(Number(p.weeklyBudgetUsd ?? 0) > 0);
     setWeeklyBudgetUsd(formatBudgetValue(Number(p.weeklyBudgetUsd ?? 0)));
-    setWeeklyBudgetAnchorAt(normalizeHourInputValue(p.weeklyBudgetAnchorAt) || getCurrentHourInputValue());
+    setWeeklyBudgetAnchorAt(
+      normalizeHourInputValue(p.weeklyBudgetAnchorAt) || getCurrentHourInputValue()
+    );
 
     const excluded = uniqStrings(p.excludedModels || []);
     setAllowClaudeCategory(!hasManagedCategoryPattern(excluded, CLAUDE_CATEGORY_PATTERNS));
@@ -542,7 +546,9 @@ export function APIKeyPoliciesPage() {
     }
     if (weeklyBudgetEnabled && parsedWeeklyBudgetUsd == null) {
       showNotification(
-        t('api_key_policies.weekly_budget_invalid', { defaultValue: '请填写有效的每周额度（USD）' }),
+        t('api_key_policies.weekly_budget_invalid', {
+          defaultValue: '请填写有效的每周额度（USD）',
+        }),
         'error'
       );
       return;
@@ -573,6 +579,7 @@ export function APIKeyPoliciesPage() {
         'api-key': apiKey,
         value: {
           'enable-claude-models': enableClaudeModels,
+          'enable-claude-opus-1m': enableClaudeOpus1M,
           'upstream-base-url': upstreamValue,
           'allow-claude-opus-4-6': allowOpus46,
           'excluded-models': excludedModels,
@@ -607,6 +614,7 @@ export function APIKeyPoliciesPage() {
     claudeFailoverRules,
     claudeFailoverTargetModel,
     enableClaudeModels,
+    enableClaudeOpus1M,
     allowClaudeCategory,
     allowChatGPTCategory,
     excludedCustom,
@@ -786,6 +794,30 @@ export function APIKeyPoliciesPage() {
               <div className={styles.fieldRow}>
                 <div className={styles.fieldText}>
                   <div className={styles.fieldLabel}>
+                    {t('api_key_policies.enable_claude_opus_1m', {
+                      defaultValue: '允许 Opus 1M（覆盖全局）',
+                    })}
+                  </div>
+                  <div className={styles.fieldHint}>
+                    {t('api_key_policies.enable_claude_opus_1m_hint', {
+                      defaultValue:
+                        '当系统页已开启“默认禁用 Claude Opus 1M”时，打开这里可让当前 API Key 继续携带 Opus 1M 能力。',
+                    })}
+                  </div>
+                </div>
+                <ToggleSwitch
+                  checked={enableClaudeOpus1M}
+                  onChange={setEnableClaudeOpus1M}
+                  disabled={disableControls || !selectedKey}
+                  ariaLabel={t('api_key_policies.enable_claude_opus_1m', {
+                    defaultValue: '允许 Opus 1M（覆盖全局）',
+                  })}
+                />
+              </div>
+
+              <div className={styles.fieldRow}>
+                <div className={styles.fieldText}>
+                  <div className={styles.fieldLabel}>
                     {t('api_key_policies.allow_opus46', { defaultValue: '允许 claude-opus-4-6' })}
                   </div>
                   <div className={styles.fieldHint}>
@@ -847,7 +879,9 @@ export function APIKeyPoliciesPage() {
                     />
                   </div>
                   <Input
-                    label={t('api_key_policies.daily_budget_input', { defaultValue: '每日额度（USD）' })}
+                    label={t('api_key_policies.daily_budget_input', {
+                      defaultValue: '每日额度（USD）',
+                    })}
                     hint={t('api_key_policies.daily_budget_input_hint', {
                       defaultValue: '支持整数或两位小数；留空或关闭即不限。',
                     })}
@@ -862,7 +896,9 @@ export function APIKeyPoliciesPage() {
                   <div className={styles.budgetCardHeader}>
                     <div>
                       <div className={styles.budgetTitle}>
-                        {t('api_key_policies.weekly_budget_title', { defaultValue: '每周成本上限' })}
+                        {t('api_key_policies.weekly_budget_title', {
+                          defaultValue: '每周成本上限',
+                        })}
                       </div>
                       <div className={styles.budgetHint}>
                         {t('api_key_policies.weekly_budget_hint', {
@@ -880,7 +916,9 @@ export function APIKeyPoliciesPage() {
                     />
                   </div>
                   <Input
-                    label={t('api_key_policies.weekly_budget_input', { defaultValue: '每周额度（USD）' })}
+                    label={t('api_key_policies.weekly_budget_input', {
+                      defaultValue: '每周额度（USD）',
+                    })}
                     hint={t('api_key_policies.weekly_budget_input_hint', {
                       defaultValue: '例如 400；按开始时间起算，持续 7 天。',
                     })}
@@ -899,7 +937,9 @@ export function APIKeyPoliciesPage() {
                       defaultValue: '默认取当前小时；可自定义到整点，窗口固定为 168 小时滚动。',
                     })}
                     value={weeklyBudgetAnchorAt}
-                    onChange={(e) => setWeeklyBudgetAnchorAt(normalizeHourInputValue(e.target.value))}
+                    onChange={(e) =>
+                      setWeeklyBudgetAnchorAt(normalizeHourInputValue(e.target.value))
+                    }
                     disabled={disableControls || !selectedKey || !weeklyBudgetEnabled}
                   />
                   {weeklyBudgetEnabled ? (
@@ -992,7 +1032,9 @@ export function APIKeyPoliciesPage() {
                       variant="secondary"
                       size="sm"
                       disabled={routingControlsDisabled}
-                      onClick={() => upsertPresetRoutingRule(OPUS_46_RULE_PATTERN, GPT54_HIGH_TARGET)}
+                      onClick={() =>
+                        upsertPresetRoutingRule(OPUS_46_RULE_PATTERN, GPT54_HIGH_TARGET)
+                      }
                     >
                       {t('api_key_policies.routing_add_opus46', { defaultValue: 'Opus 4.6' })}
                     </Button>
@@ -1109,7 +1151,9 @@ export function APIKeyPoliciesPage() {
                             variant="secondary"
                             size="sm"
                             disabled={routingControlsDisabled}
-                            onClick={() => updateRoutingRule(idx, { targetModel: GPT54_HIGH_TARGET })}
+                            onClick={() =>
+                              updateRoutingRule(idx, { targetModel: GPT54_HIGH_TARGET })
+                            }
                           >
                             gpt-5.4(high)
                           </Button>
