@@ -125,10 +125,6 @@ const normalizeProviderKeyConfig = (item: unknown): ProviderKeyConfig | null => 
   if (!trimmed) return null;
 
   const config: ProviderKeyConfig = { apiKey: trimmed };
-  const fastMode = normalizeBoolean(
-    record?.['fast-mode'] ?? record?.fastMode ?? record?.['fast_mode']
-  );
-  if (fastMode !== undefined) config.fastMode = fastMode;
   const prefix = normalizePrefix(record?.prefix ?? record?.['prefix']);
   if (prefix) config.prefix = prefix;
   const baseUrl = record ? (record['base-url'] ?? record.baseUrl) : undefined;

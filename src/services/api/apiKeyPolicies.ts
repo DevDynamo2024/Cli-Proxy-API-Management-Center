@@ -21,6 +21,7 @@ export interface ModelRoutingRule {
 
 export interface ApiKeyPolicy {
   apiKey: string;
+  fastMode: boolean;
   upstreamBaseUrl: string;
   excludedModels: string[];
   enableClaudeOpus1M: boolean;
@@ -37,6 +38,7 @@ export interface ApiKeyPolicy {
 
 export type ApiKeyPolicyDTO = {
   'api-key': string;
+  'fast-mode'?: unknown;
   'upstream-base-url'?: unknown;
   'excluded-models'?: unknown;
   'enable-claude-opus-1m'?: unknown;
@@ -98,6 +100,8 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   const dto = raw as Partial<ApiKeyPolicyDTO> & Record<string, unknown>;
   const apiKey = String(dto['api-key'] ?? '').trim();
   if (!apiKey) return null;
+  const fastModeRaw = dto['fast-mode'];
+  const fastMode = typeof fastModeRaw === 'boolean' ? fastModeRaw : Boolean(fastModeRaw);
 
   const upstreamRaw = dto['upstream-base-url'];
   const upstreamBaseUrl = upstreamRaw == null ? '' : String(upstreamRaw).trim();
@@ -218,6 +222,7 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
 
   return {
     apiKey,
+    fastMode,
     upstreamBaseUrl,
     excludedModels,
     enableClaudeOpus1M,
@@ -239,6 +244,7 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
 
   return {
     'api-key': policy.apiKey,
+    'fast-mode': Boolean(policy.fastMode),
     'upstream-base-url': String(policy.upstreamBaseUrl ?? '').trim(),
     'excluded-models': policy.excludedModels,
     'enable-claude-opus-1m': policy.enableClaudeOpus1M,

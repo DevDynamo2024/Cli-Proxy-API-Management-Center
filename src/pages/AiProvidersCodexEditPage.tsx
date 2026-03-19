@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HeaderInputList } from '@/components/ui/HeaderInputList';
-import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { providersApi } from '@/services/api';
@@ -21,7 +20,6 @@ type LocationState = { fromAiProviders?: boolean } | null;
 
 const buildEmptyForm = (): ProviderFormState => ({
   apiKey: '',
-  fastMode: false,
   prefix: '',
   baseUrl: '',
   proxyUrl: '',
@@ -155,7 +153,6 @@ export function AiProvidersCodexEditPage() {
     try {
       const payload: ProviderKeyConfig = {
         apiKey: form.apiKey.trim(),
-        fastMode: form.fastMode ? true : undefined,
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         proxyUrl: form.proxyUrl?.trim() || undefined,
@@ -246,15 +243,6 @@ export function AiProvidersCodexEditPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, proxyUrl: e.target.value }))}
               disabled={disableControls || saving}
             />
-            <div className="form-group">
-              <ToggleSwitch
-                label={t('ai_providers.codex_fast_mode_label')}
-                checked={Boolean(form.fastMode)}
-                onChange={(value) => setForm((prev) => ({ ...prev, fastMode: value }))}
-                disabled={disableControls || saving}
-              />
-              <div className="hint">{t('ai_providers.codex_fast_mode_hint')}</div>
-            </div>
             <HeaderInputList
               entries={form.headers}
               onChange={(entries) => setForm((prev) => ({ ...prev, headers: entries }))}

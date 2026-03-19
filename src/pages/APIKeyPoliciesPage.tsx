@@ -229,6 +229,7 @@ export function APIKeyPoliciesPage() {
     return 'basic';
   });
   const [enableClaudeModels, setEnableClaudeModels] = useState(false);
+  const [fastMode, setFastMode] = useState(false);
   const [enableClaudeOpus1M, setEnableClaudeOpus1M] = useState(false);
   const [allowOpus46, setAllowOpus46] = useState(true);
   const [opus46DailyLimit, setOpus46DailyLimit] = useState('');
@@ -340,6 +341,7 @@ export function APIKeyPoliciesPage() {
       policies.find((x) => x.apiKey === key) ??
       ({
         apiKey: key,
+        fastMode: false,
         enableClaudeModels: false,
         enableClaudeOpus1M: false,
         upstreamBaseUrl: '',
@@ -355,6 +357,7 @@ export function APIKeyPoliciesPage() {
         claudeFailoverRules: [],
       } as ApiKeyPolicy);
 
+    setFastMode(Boolean(p.fastMode));
     setEnableClaudeModels(Boolean(p.enableClaudeModels));
     setEnableClaudeOpus1M(Boolean(p.enableClaudeOpus1M));
     setAllowOpus46(p.allowClaudeOpus46 ?? true);
@@ -578,6 +581,7 @@ export function APIKeyPoliciesPage() {
       await apiClient.patch('/api-key-policies', {
         'api-key': apiKey,
         value: {
+          'fast-mode': fastMode,
           'enable-claude-models': enableClaudeModels,
           'enable-claude-opus-1m': enableClaudeOpus1M,
           'upstream-base-url': upstreamValue,
@@ -614,6 +618,7 @@ export function APIKeyPoliciesPage() {
     claudeFailoverRules,
     claudeFailoverTargetModel,
     enableClaudeModels,
+    fastMode,
     enableClaudeOpus1M,
     allowClaudeCategory,
     allowChatGPTCategory,
@@ -765,6 +770,30 @@ export function APIKeyPoliciesPage() {
                   defaultValue:
                     '建议先定义这个 API Key 的访问边界，再决定是否开放高成本模型与预算。次数限制与费用额度均由服务端持久化统计。',
                 })}
+              </div>
+
+              <div className={styles.fieldRow}>
+                <div className={styles.fieldText}>
+                  <div className={styles.fieldLabel}>
+                    {t('api_key_policies.fast_mode', {
+                      defaultValue: 'Fast 模式（OpenAI / GPT 优先级）',
+                    })}
+                  </div>
+                  <div className={styles.fieldHint}>
+                    {t('api_key_policies.fast_mode_hint', {
+                      defaultValue:
+                        '开启后，当前客户端 API Key 命中的 OpenAI / GPT 请求会自动附带 service_tier=priority。适用于 gpt-5.4 等 OpenAI 侧优先级处理场景。',
+                    })}
+                  </div>
+                </div>
+                <ToggleSwitch
+                  checked={fastMode}
+                  onChange={setFastMode}
+                  disabled={disableControls || !selectedKey}
+                  ariaLabel={t('api_key_policies.fast_mode', {
+                    defaultValue: 'Fast 模式（OpenAI / GPT 优先级）',
+                  })}
+                />
               </div>
 
               <div className={styles.fieldRow}>

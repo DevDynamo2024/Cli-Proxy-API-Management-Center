@@ -92,14 +92,6 @@ export function CodexSection({
                   <span className={styles.fieldLabel}>{t('common.api_key')}:</span>
                   <span className={styles.fieldValue}>{maskApiKey(item.apiKey)}</span>
                 </div>
-                <div className={styles.fieldRow}>
-                  <span className={styles.fieldLabel}>
-                    {t('ai_providers.codex_fast_mode_label')}:
-                  </span>
-                  <span className={styles.fieldValue}>
-                    {item.fastMode ? t('common.yes') : t('common.no')}
-                  </span>
-                </div>
                 {item.prefix && (
                   <div className={styles.fieldRow}>
                     <span className={styles.fieldLabel}>{t('common.prefix')}:</span>
@@ -130,11 +122,6 @@ export function CodexSection({
                 {configDisabled && (
                   <div className="status-badge warning" style={{ marginTop: 8, marginBottom: 0 }}>
                     {t('ai_providers.config_disabled_badge')}
-                  </div>
-                )}
-                {item.fastMode && (
-                  <div className="status-badge" style={{ marginTop: 8, marginBottom: 0 }}>
-                    {t('ai_providers.codex_fast_mode_badge')}
                   </div>
                 )}
                 {excludedModels.length ? (
