@@ -1,4 +1,12 @@
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FocusEventHandler,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { IconChevronDown } from './icons';
 
 interface AutocompleteInputProps {
@@ -15,6 +23,7 @@ interface AutocompleteInputProps {
   wrapperStyle?: React.CSSProperties;
   id?: string;
   rightElement?: ReactNode;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
 }
 
 export function AutocompleteInput({
@@ -30,7 +39,8 @@ export function AutocompleteInput({
   wrapperClassName = '',
   wrapperStyle,
   id,
-  rightElement
+  rightElement,
+  onBlur,
 }: AutocompleteInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -107,6 +117,7 @@ export function AutocompleteInput({
             onChange={handleInputChange}
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
+            onBlur={onBlur}
             placeholder={placeholder}
             disabled={disabled}
             autoComplete="off"

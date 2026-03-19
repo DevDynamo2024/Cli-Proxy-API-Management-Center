@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { AutocompleteInput } from '@/components/ui/AutocompleteInput';
 import { Input } from '@/components/ui/Input';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
@@ -51,6 +52,16 @@ function uniqStrings(list: string[]): string[] {
     out.push(t);
   }
   return out;
+}
+
+function findExactStringMatch(list: string[], value: string): string {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return '';
+  return (
+    list.find((item) => item === trimmed) ??
+    list.find((item) => item.toLowerCase() === trimmed.toLowerCase()) ??
+    ''
+  );
 }
 
 function normalizeModelPattern(value: string): string {
@@ -223,6 +234,7 @@ export function APIKeyPoliciesPage() {
   const [error, setError] = useState('');
 
   const [selectedKey, setSelectedKey] = useState('');
+  const [keySearchTerm, setKeySearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<PolicyTab>(() => {
     const saved = localStorage.getItem('api-key-policies:tab');
     if (saved === 'basic' || saved === 'routing' || saved === 'failover') return saved;
@@ -253,6 +265,11 @@ export function APIKeyPoliciesPage() {
   const routingControlsDisabled = disableControls || !selectedKey;
   const failoverControlsDisabled = disableControls || !selectedKey;
   const allowedCategoryCount = Number(allowClaudeCategory) + Number(allowChatGPTCategory);
+  const keySearchMatchCount = useMemo(() => {
+    const keyword = keySearchTerm.trim().toLowerCase();
+    if (!keyword) return apiKeys.length;
+    return apiKeys.filter((key) => key.toLowerCase().includes(keyword)).length;
+  }, [apiKeys, keySearchTerm]);
 
   const currentPolicy = useMemo(() => {
     const key = selectedKey.trim();
@@ -334,6 +351,10 @@ export function APIKeyPoliciesPage() {
   }, [loadAll]);
 
   useEffect(() => {
+    setKeySearchTerm(selectedKey);
+  }, [selectedKey]);
+
+  useEffect(() => {
     const key = selectedKey.trim();
     if (!key) return;
 
@@ -392,6 +413,49 @@ export function APIKeyPoliciesPage() {
     if (!weeklyBudgetEnabled) return;
     setWeeklyBudgetAnchorAt((prev) => normalizeHourInputValue(prev) || getCurrentHourInputValue());
   }, [weeklyBudgetEnabled]);
+
+  const handleKeySearchChange = useCallback(
+    (value: string) => {
+      setKeySearchTerm(value);
+      const match = findExactStringMatch(apiKeys, value);
+      if (match && match !== selectedKey) {
+        setSelectedKey(match);
+      }
+    },
+    [apiKeys, selectedKey]
+  );
+
+  const handleKeySearchBlur = useCallback(() => {
+    const match = findExactStringMatch(apiKeys, keySearchTerm);
+    if (match) {
+      setKeySearchTerm(match);
+      if (match !== selectedKey) {
+        setSelectedKey(match);
+      }
+      return;
+    }
+    setKeySearchTerm(selectedKey);
+  }, [apiKeys, keySearchTerm, selectedKey]);
+
+  const keySearchHint = useMemo(() => {
+    if (apiKeys.length === 0) {
+      return t('api_key_policies.no_keys', { defaultValue: '暂无 API Key' });
+    }
+    if (!keySearchTerm.trim()) {
+      return t('api_key_policies.key_search_hint', {
+        defaultValue: '输入 API Key 片段即可搜索，下拉中点击后切换到对应策略。',
+      });
+    }
+    if (keySearchMatchCount > 0) {
+      return t('api_key_policies.key_search_matches', {
+        defaultValue: '匹配到 {{count}} 个 API Key',
+        count: keySearchMatchCount,
+      });
+    }
+    return t('api_key_policies.key_search_empty', {
+      defaultValue: '没有匹配的 API Key，请换个关键词试试。',
+    });
+  }, [apiKeys.length, keySearchMatchCount, keySearchTerm, t]);
 
   const toggleCategoryAllowed = useCallback((category: AccessCategory, allowed: boolean) => {
     if (category === 'claude') {
@@ -693,31 +757,19 @@ export function APIKeyPoliciesPage() {
             </span>
           }
         >
-          <div className="form-group">
-            <label>{t('api_key_policies.select_key', { defaultValue: '选择 API Key' })}</label>
-            <div className={styles.selectWrap}>
-              <select
-                className={styles.select}
-                value={selectedKey}
-                disabled={disableControls || loading}
-                onChange={(e) => setSelectedKey(e.target.value)}
-              >
-                {apiKeys.length === 0 ? (
-                  <option value="">
-                    {t('api_key_policies.no_keys', { defaultValue: '暂无 API Key' })}
-                  </option>
-                ) : null}
-                {apiKeys.map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
-              <span className={styles.selectIcon}>
-                <IconChevronDown size={16} />
-              </span>
-            </div>
-          </div>
+          <AutocompleteInput
+            id="api-key-policy-selector"
+            label={t('api_key_policies.select_key', { defaultValue: '选择 API Key' })}
+            value={keySearchTerm}
+            onChange={handleKeySearchChange}
+            onBlur={handleKeySearchBlur}
+            options={apiKeys}
+            placeholder={t('api_key_policies.key_search_placeholder', {
+              defaultValue: '搜索并选择 API Key',
+            })}
+            disabled={disableControls || loading || apiKeys.length === 0}
+            hint={keySearchHint}
+          />
 
           <datalist id="codex-model-definitions">
             {codexModels.map((m) => (
