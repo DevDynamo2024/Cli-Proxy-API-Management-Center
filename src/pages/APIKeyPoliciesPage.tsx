@@ -780,6 +780,7 @@ export function APIKeyPoliciesPage() {
             onChange={handleKeySearchChange}
             onBlur={handleKeySearchBlur}
             options={apiKeys}
+            openAllOnFocus
             placeholder={t('api_key_policies.key_search_placeholder', {
               defaultValue: '搜索并选择 API Key',
             })}
