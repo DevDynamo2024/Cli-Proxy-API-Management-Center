@@ -37,8 +37,16 @@ const OPUS_46_ID = 'claude-opus-4-6';
 const OPUS_46_RULE_PATTERN = 'claude-opus-4-6*';
 const SONNET_46_RULE_PATTERN = 'claude-sonnet-4-6*';
 const DEFAULT_STICKY_WINDOW_SECONDS = 3600;
+const DEFAULT_GPT52_TARGET = 'gpt-5.2(medium)';
+const GPT52_HIGH_TARGET = 'gpt-5.2(high)';
 const DEFAULT_GPT54_TARGET = 'gpt-5.4(medium)';
 const GPT54_HIGH_TARGET = 'gpt-5.4(high)';
+const GPT_TARGET_PRESETS = [
+  { label: DEFAULT_GPT52_TARGET, value: DEFAULT_GPT52_TARGET },
+  { label: GPT52_HIGH_TARGET, value: GPT52_HIGH_TARGET },
+  { label: DEFAULT_GPT54_TARGET, value: DEFAULT_GPT54_TARGET },
+  { label: GPT54_HIGH_TARGET, value: GPT54_HIGH_TARGET },
+] as const;
 const CLAUDE_CATEGORY_PATTERNS = ['claude-*'] as const;
 const CHATGPT_CATEGORY_PATTERNS = ['gpt-*', 'chatgpt-*', 'o1*', 'o3*', 'o4*'] as const;
 
@@ -270,6 +278,14 @@ export function APIKeyPoliciesPage() {
     if (!keyword) return apiKeys.length;
     return apiKeys.filter((key) => key.toLowerCase().includes(keyword)).length;
   }, [apiKeys, keySearchTerm]);
+  const codexModelAutocompleteOptions = useMemo(
+    () =>
+      uniqStrings([
+        ...GPT_TARGET_PRESETS.map((item) => item.value),
+        ...codexModels.map((m) => m.id),
+      ]),
+    [codexModels]
+  );
 
   const currentPolicy = useMemo(() => {
     const key = selectedKey.trim();
@@ -772,8 +788,8 @@ export function APIKeyPoliciesPage() {
           />
 
           <datalist id="codex-model-definitions">
-            {codexModels.map((m) => (
-              <option key={m.id} value={m.id} />
+            {codexModelAutocompleteOptions.map((model) => (
+              <option key={model} value={model} />
             ))}
           </datalist>
 
@@ -1211,33 +1227,24 @@ export function APIKeyPoliciesPage() {
                               updateRoutingRule(idx, { targetModel: e.target.value })
                             }
                             placeholder={t('api_key_policies.routing_target_placeholder', {
-                              defaultValue: 'target-model，例如 gpt-5.4(medium)',
+                              defaultValue: 'target-model，例如 gpt-5.2(medium) 或 gpt-5.4(medium)',
                             })}
                             disabled={routingControlsDisabled}
                             list="codex-model-definitions"
                           />
                         </div>
                         <div className={styles.quickPick}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={routingControlsDisabled}
-                            onClick={() =>
-                              updateRoutingRule(idx, { targetModel: DEFAULT_GPT54_TARGET })
-                            }
-                          >
-                            gpt-5.4(medium)
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={routingControlsDisabled}
-                            onClick={() =>
-                              updateRoutingRule(idx, { targetModel: GPT54_HIGH_TARGET })
-                            }
-                          >
-                            gpt-5.4(high)
-                          </Button>
+                          {GPT_TARGET_PRESETS.map((preset) => (
+                            <Button
+                              key={`${idx}-${preset.value}`}
+                              variant="secondary"
+                              size="sm"
+                              disabled={routingControlsDisabled}
+                              onClick={() => updateRoutingRule(idx, { targetModel: preset.value })}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
                         </div>
 
                         <div className={styles.routeRuleParams}>
@@ -1365,33 +1372,29 @@ export function APIKeyPoliciesPage() {
               <Input
                 label={t('api_key_policies.failover_target', { defaultValue: '默认目标模型' })}
                 hint={t('api_key_policies.failover_target_hint', {
-                  defaultValue: '规则未命中时使用；建议选择 Codex 模型。',
+                  defaultValue:
+                    '规则未命中时使用；建议选择 Codex 模型，可在 gpt-5.2 和 gpt-5.4 之间切换。',
                 })}
                 value={claudeFailoverTargetModel}
                 onChange={(e) => setClaudeFailoverTargetModel(e.target.value)}
                 placeholder={t('api_key_policies.failover_target_placeholder', {
-                  defaultValue: '默认 gpt-5.4(medium)',
+                  defaultValue: '默认 gpt-5.2(medium) 或 gpt-5.4(medium)',
                 })}
                 disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                 list="codex-model-definitions"
               />
               <div className={styles.quickPick}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={failoverControlsDisabled || !claudeFailoverEnabled}
-                  onClick={() => setClaudeFailoverTargetModel(DEFAULT_GPT54_TARGET)}
-                >
-                  gpt-5.4(medium)
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={failoverControlsDisabled || !claudeFailoverEnabled}
-                  onClick={() => setClaudeFailoverTargetModel(GPT54_HIGH_TARGET)}
-                >
-                  gpt-5.4(high)
-                </Button>
+                {GPT_TARGET_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.value}
+                    variant="secondary"
+                    size="sm"
+                    disabled={failoverControlsDisabled || !claudeFailoverEnabled}
+                    onClick={() => setClaudeFailoverTargetModel(preset.value)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
               </div>
 
               <div className={styles.sectionHeader}>
@@ -1453,7 +1456,7 @@ export function APIKeyPoliciesPage() {
                           value={r.targetModel}
                           onChange={(e) => updateFailoverRule(idx, { targetModel: e.target.value })}
                           placeholder={t('api_key_policies.failover_rule_target_placeholder', {
-                            defaultValue: 'target-model，例如 gpt-5.4(medium)',
+                            defaultValue: 'target-model，例如 gpt-5.2(medium) 或 gpt-5.4(medium)',
                           })}
                           disabled={failoverControlsDisabled || !claudeFailoverEnabled}
                           list="codex-model-definitions"
