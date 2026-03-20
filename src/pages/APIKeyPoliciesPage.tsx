@@ -29,7 +29,7 @@ import { toModelFailoverRuleDTOs, toModelRoutingRuleDTOs } from '@/services/api/
 import styles from './APIKeyPoliciesPage.module.scss';
 
 type ModelDef = { id: string; display_name?: string };
-type ApiKeyPolicy = StoredApiKeyPolicy & { enableClaudeModels?: boolean };
+type ApiKeyPolicy = StoredApiKeyPolicy;
 type PolicyTab = 'basic' | 'routing' | 'failover';
 type AccessCategory = 'claude' | 'chatgpt';
 
@@ -41,11 +41,19 @@ const DEFAULT_GPT52_TARGET = 'gpt-5.2(medium)';
 const GPT52_HIGH_TARGET = 'gpt-5.2(high)';
 const DEFAULT_GPT54_TARGET = 'gpt-5.4(medium)';
 const GPT54_HIGH_TARGET = 'gpt-5.4(high)';
+const DEFAULT_CLAUDE_GPT_TARGET_FAMILY = '';
+const GPT52_FAMILY = 'gpt-5.2';
+const GPT54_FAMILY = 'gpt-5.4';
 const GPT_TARGET_PRESETS = [
   { label: DEFAULT_GPT52_TARGET, value: DEFAULT_GPT52_TARGET },
   { label: GPT52_HIGH_TARGET, value: GPT52_HIGH_TARGET },
   { label: DEFAULT_GPT54_TARGET, value: DEFAULT_GPT54_TARGET },
   { label: GPT54_HIGH_TARGET, value: GPT54_HIGH_TARGET },
+] as const;
+const CLAUDE_GPT_TARGET_FAMILY_OPTIONS = [
+  { label: '默认（gpt-5.4）', value: DEFAULT_CLAUDE_GPT_TARGET_FAMILY },
+  { label: GPT52_FAMILY, value: GPT52_FAMILY },
+  { label: GPT54_FAMILY, value: GPT54_FAMILY },
 ] as const;
 const CLAUDE_CATEGORY_PATTERNS = ['claude-*'] as const;
 const CHATGPT_CATEGORY_PATTERNS = ['gpt-*', 'chatgpt-*', 'o1*', 'o3*', 'o4*'] as const;
@@ -249,6 +257,9 @@ export function APIKeyPoliciesPage() {
     return 'basic';
   });
   const [enableClaudeModels, setEnableClaudeModels] = useState(false);
+  const [claudeGptTargetFamily, setClaudeGptTargetFamily] = useState(
+    DEFAULT_CLAUDE_GPT_TARGET_FAMILY
+  );
   const [fastMode, setFastMode] = useState(false);
   const [enableClaudeOpus1M, setEnableClaudeOpus1M] = useState(false);
   const [allowOpus46, setAllowOpus46] = useState(true);
@@ -306,39 +317,18 @@ export function APIKeyPoliciesPage() {
     setLoading(true);
     setError('');
     try {
-      const [keys, policyList, rawPolicyResp, codexDefs] = await Promise.all([
+      const [keys, policyList, codexDefs] = await Promise.all([
         apiKeysApi.list(),
         apiKeyPoliciesApi.list(),
-        apiClient.get<Record<string, unknown>>('/api-key-policies'),
         authFilesApi.getModelDefinitions('codex'),
       ]);
       const normalizedKeys = uniqStrings([
         ...keys,
         ...policyList.map((policy) => String(policy.apiKey ?? '').trim()),
       ]);
-      const enableClaudeModelsByKey = new Map<string, boolean>();
-      const rawPolicies = rawPolicyResp['api-key-policies'];
-      if (Array.isArray(rawPolicies)) {
-        rawPolicies.forEach((item) => {
-          if (!item || typeof item !== 'object' || Array.isArray(item)) return;
-          const record = item as Record<string, unknown>;
-          const apiKey = String(record['api-key'] ?? '').trim();
-          if (!apiKey) return;
-          const rawValue = record['enable-claude-models'];
-          enableClaudeModelsByKey.set(
-            apiKey,
-            typeof rawValue === 'boolean' ? rawValue : Boolean(rawValue)
-          );
-        });
-      }
 
       setApiKeys(normalizedKeys);
-      setPolicies(
-        policyList.map((policy) => ({
-          ...policy,
-          enableClaudeModels: enableClaudeModelsByKey.get(policy.apiKey) ?? false,
-        }))
-      );
+      setPolicies(policyList);
       setCodexModels(
         (codexDefs || [])
           .map((m) => ({ id: String(m.id ?? '').trim(), display_name: m.display_name }))
@@ -380,6 +370,7 @@ export function APIKeyPoliciesPage() {
         apiKey: key,
         fastMode: false,
         enableClaudeModels: false,
+        claudeGptTargetFamily: DEFAULT_CLAUDE_GPT_TARGET_FAMILY,
         enableClaudeOpus1M: false,
         upstreamBaseUrl: '',
         excludedModels: [],
@@ -396,6 +387,7 @@ export function APIKeyPoliciesPage() {
 
     setFastMode(Boolean(p.fastMode));
     setEnableClaudeModels(Boolean(p.enableClaudeModels));
+    setClaudeGptTargetFamily(String(p.claudeGptTargetFamily ?? '').trim());
     setEnableClaudeOpus1M(Boolean(p.enableClaudeOpus1M));
     setAllowOpus46(p.allowClaudeOpus46 ?? true);
     setClaudeFailoverEnabled(Boolean(p.claudeFailoverEnabled));
@@ -663,6 +655,7 @@ export function APIKeyPoliciesPage() {
         value: {
           'fast-mode': fastMode,
           'enable-claude-models': enableClaudeModels,
+          'claude-gpt-target-family': claudeGptTargetFamily,
           'enable-claude-opus-1m': enableClaudeOpus1M,
           'upstream-base-url': upstreamValue,
           'allow-claude-opus-4-6': allowOpus46,
@@ -697,6 +690,7 @@ export function APIKeyPoliciesPage() {
     claudeFailoverEnabled,
     claudeFailoverRules,
     claudeFailoverTargetModel,
+    claudeGptTargetFamily,
     enableClaudeModels,
     fastMode,
     enableClaudeOpus1M,
@@ -863,6 +857,42 @@ export function APIKeyPoliciesPage() {
                     defaultValue: 'Fast 模式（OpenAI / GPT 优先级）',
                   })}
                 />
+              </div>
+
+              <div className={styles.fieldRow}>
+                <div className={styles.fieldText}>
+                  <div className={styles.fieldLabel}>
+                    {t('api_key_policies.claude_gpt_target_family', {
+                      defaultValue: 'Claude 转 GPT 目标模型',
+                    })}
+                  </div>
+                  <div className={styles.fieldHint}>
+                    {t('api_key_policies.claude_gpt_target_family_hint', {
+                      defaultValue:
+                        '仅在系统页开启“Claude 请求全局转 GPT”且当前 Key 未打开“启用 Claude 模型”时生效。留空表示沿用默认 gpt-5.4。',
+                    })}
+                  </div>
+                </div>
+                <div className={styles.selectWrap}>
+                  <select
+                    className={styles.select}
+                    value={claudeGptTargetFamily}
+                    onChange={(e) => setClaudeGptTargetFamily(e.target.value)}
+                    disabled={disableControls || !selectedKey || enableClaudeModels}
+                    aria-label={t('api_key_policies.claude_gpt_target_family', {
+                      defaultValue: 'Claude 转 GPT 目标模型',
+                    })}
+                  >
+                    {CLAUDE_GPT_TARGET_FAMILY_OPTIONS.map((option) => (
+                      <option key={option.label} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={styles.selectIcon}>
+                    <IconChevronDown size={16} />
+                  </span>
+                </div>
               </div>
 
               <div className={styles.fieldRow}>

@@ -22,6 +22,8 @@ export interface ModelRoutingRule {
 export interface ApiKeyPolicy {
   apiKey: string;
   fastMode: boolean;
+  enableClaudeModels: boolean;
+  claudeGptTargetFamily: string;
   upstreamBaseUrl: string;
   excludedModels: string[];
   enableClaudeOpus1M: boolean;
@@ -39,6 +41,8 @@ export interface ApiKeyPolicy {
 export type ApiKeyPolicyDTO = {
   'api-key': string;
   'fast-mode'?: unknown;
+  'enable-claude-models'?: unknown;
+  'claude-gpt-target-family'?: unknown;
   'upstream-base-url'?: unknown;
   'excluded-models'?: unknown;
   'enable-claude-opus-1m'?: unknown;
@@ -102,6 +106,14 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   if (!apiKey) return null;
   const fastModeRaw = dto['fast-mode'];
   const fastMode = typeof fastModeRaw === 'boolean' ? fastModeRaw : Boolean(fastModeRaw);
+  const enableClaudeModelsRaw = dto['enable-claude-models'];
+  const enableClaudeModels =
+    typeof enableClaudeModelsRaw === 'boolean'
+      ? enableClaudeModelsRaw
+      : enableClaudeModelsRaw == null
+        ? false
+        : Boolean(enableClaudeModelsRaw);
+  const claudeGptTargetFamily = String(dto['claude-gpt-target-family'] ?? '').trim();
 
   const upstreamRaw = dto['upstream-base-url'];
   const upstreamBaseUrl = upstreamRaw == null ? '' : String(upstreamRaw).trim();
@@ -223,6 +235,8 @@ function normalizePolicy(raw: unknown): ApiKeyPolicy | null {
   return {
     apiKey,
     fastMode,
+    enableClaudeModels,
+    claudeGptTargetFamily,
     upstreamBaseUrl,
     excludedModels,
     enableClaudeOpus1M,
@@ -245,6 +259,8 @@ function toDTO(policy: ApiKeyPolicy): ApiKeyPolicyDTO {
   return {
     'api-key': policy.apiKey,
     'fast-mode': Boolean(policy.fastMode),
+    'enable-claude-models': Boolean(policy.enableClaudeModels),
+    'claude-gpt-target-family': String(policy.claudeGptTargetFamily ?? '').trim(),
     'upstream-base-url': String(policy.upstreamBaseUrl ?? '').trim(),
     'excluded-models': policy.excludedModels,
     'enable-claude-opus-1m': policy.enableClaudeOpus1M,
