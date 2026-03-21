@@ -288,6 +288,13 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
   config.claudeToGptRoutingEnabled = normalizeBoolean(
     raw['claude-to-gpt-routing-enabled'] ?? raw.claudeToGptRoutingEnabled
   );
+  const claudeToGptTargetFamily = raw['claude-to-gpt-target-family'] ?? raw.claudeToGptTargetFamily;
+  config.claudeToGptTargetFamily =
+    typeof claudeToGptTargetFamily === 'string'
+      ? claudeToGptTargetFamily
+      : claudeToGptTargetFamily === undefined || claudeToGptTargetFamily === null
+        ? undefined
+        : String(claudeToGptTargetFamily);
   config.disableClaudeOpus1M = normalizeBoolean(
     raw['disable-claude-opus-1m'] ?? raw.disableClaudeOpus1M
   );

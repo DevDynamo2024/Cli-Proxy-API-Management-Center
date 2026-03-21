@@ -37,6 +37,7 @@ const SECTION_KEYS: RawConfigSection[] = [
   'debug',
   'proxy-url',
   'claude-to-gpt-routing-enabled',
+  'claude-to-gpt-target-family',
   'disable-claude-opus-1m',
   'request-retry',
   'quota-exceeded',
@@ -66,6 +67,8 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
       return config.proxyUrl;
     case 'claude-to-gpt-routing-enabled':
       return config.claudeToGptRoutingEnabled;
+    case 'claude-to-gpt-target-family':
+      return config.claudeToGptTargetFamily;
     case 'disable-claude-opus-1m':
       return config.disableClaudeOpus1M;
     case 'request-retry':
@@ -208,6 +211,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           break;
         case 'claude-to-gpt-routing-enabled':
           nextConfig.claudeToGptRoutingEnabled = value as Config['claudeToGptRoutingEnabled'];
+          break;
+        case 'claude-to-gpt-target-family':
+          nextConfig.claudeToGptTargetFamily = value as Config['claudeToGptTargetFamily'];
           break;
         case 'disable-claude-opus-1m':
           nextConfig.disableClaudeOpus1M = value as Config['disableClaudeOpus1M'];

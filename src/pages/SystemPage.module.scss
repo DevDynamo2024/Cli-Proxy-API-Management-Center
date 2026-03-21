@@ -78,7 +78,10 @@
   color: inherit;
   padding: $spacing-md $spacing-lg;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     transform: translateY(-1px);
@@ -134,6 +137,84 @@
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0 0 $spacing-md 0;
+}
+
+.selectRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-md;
+  margin-top: $spacing-md;
+
+  @media (max-width: 720px) {
+    flex-direction: column;
+  }
+}
+
+.selectLabelBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.selectLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.selectHint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.selectWrap {
+  position: relative;
+  min-width: 220px;
+
+  @media (max-width: 720px) {
+    width: 100%;
+  }
+}
+
+.select {
+  width: 100%;
+  appearance: none;
+  padding: 10px 38px 10px 12px;
+  border-radius: $radius-md;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 18%, transparent);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
+}
+
+.selectIcon {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 
 .clearLoginActions {
@@ -212,7 +293,9 @@
   border-radius: $radius-full;
   border: 1px solid var(--border-color);
   background-color: var(--bg-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
 }
 
 .modelName {

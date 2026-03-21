@@ -39,20 +39,26 @@ const SONNET_46_RULE_PATTERN = 'claude-sonnet-4-6*';
 const DEFAULT_STICKY_WINDOW_SECONDS = 3600;
 const DEFAULT_GPT52_TARGET = 'gpt-5.2(medium)';
 const GPT52_HIGH_TARGET = 'gpt-5.2(high)';
+const DEFAULT_GPT53_CODEX_TARGET = 'gpt-5.3-codex(medium)';
+const GPT53_CODEX_HIGH_TARGET = 'gpt-5.3-codex(high)';
 const DEFAULT_GPT54_TARGET = 'gpt-5.4(medium)';
 const GPT54_HIGH_TARGET = 'gpt-5.4(high)';
 const DEFAULT_CLAUDE_GPT_TARGET_FAMILY = '';
 const GPT52_FAMILY = 'gpt-5.2';
+const GPT53_CODEX_FAMILY = 'gpt-5.3-codex';
 const GPT54_FAMILY = 'gpt-5.4';
 const GPT_TARGET_PRESETS = [
   { label: DEFAULT_GPT52_TARGET, value: DEFAULT_GPT52_TARGET },
   { label: GPT52_HIGH_TARGET, value: GPT52_HIGH_TARGET },
+  { label: DEFAULT_GPT53_CODEX_TARGET, value: DEFAULT_GPT53_CODEX_TARGET },
+  { label: GPT53_CODEX_HIGH_TARGET, value: GPT53_CODEX_HIGH_TARGET },
   { label: DEFAULT_GPT54_TARGET, value: DEFAULT_GPT54_TARGET },
   { label: GPT54_HIGH_TARGET, value: GPT54_HIGH_TARGET },
 ] as const;
 const CLAUDE_GPT_TARGET_FAMILY_OPTIONS = [
   { label: '默认（gpt-5.4）', value: DEFAULT_CLAUDE_GPT_TARGET_FAMILY },
   { label: GPT52_FAMILY, value: GPT52_FAMILY },
+  { label: GPT53_CODEX_FAMILY, value: GPT53_CODEX_FAMILY },
   { label: GPT54_FAMILY, value: GPT54_FAMILY },
 ] as const;
 const CLAUDE_CATEGORY_PATTERNS = ['claude-*'] as const;
@@ -869,7 +875,7 @@ export function APIKeyPoliciesPage() {
                   <div className={styles.fieldHint}>
                     {t('api_key_policies.claude_gpt_target_family_hint', {
                       defaultValue:
-                        '仅在系统页开启“Claude 请求全局转 GPT”且当前 Key 未打开“启用 Claude 模型”时生效。留空表示沿用默认 gpt-5.4。',
+                        '仅在系统页开启“Claude 请求全局转 GPT”且当前 Key 未打开“启用 Claude 模型”时生效。留空表示沿用默认 gpt-5.4，也可单独指定 gpt-5.3-codex。',
                     })}
                   </div>
                 </div>

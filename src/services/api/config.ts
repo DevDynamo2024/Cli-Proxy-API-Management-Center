@@ -42,6 +42,12 @@ export const configApi = {
     apiClient.put('/claude-to-gpt-routing-enabled', { value: enabled }),
 
   /**
+   * Claude 模型全局转 GPT 默认目标模型
+   */
+  updateClaudeToGptTargetFamily: (family: string) =>
+    apiClient.put('/claude-to-gpt-target-family', { value: family }),
+
+  /**
    * 默认禁用 Claude Opus 1M
    */
   updateDisableClaudeOpus1M: (enabled: boolean) =>

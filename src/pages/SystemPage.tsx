@@ -4,7 +4,13 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconGithub, IconBookOpen, IconExternalLink, IconCode } from '@/components/ui/icons';
+import {
+  IconGithub,
+  IconBookOpen,
+  IconExternalLink,
+  IconCode,
+  IconChevronDown,
+} from '@/components/ui/icons';
 import {
   useAuthStore,
   useConfigStore,
@@ -42,6 +48,14 @@ const MODEL_CATEGORY_ICONS: Record<string, string | { light: string; dark: strin
   minimax: iconMinimax,
 };
 
+const DEFAULT_CLAUDE_GPT_TARGET_FAMILY = '';
+const EFFECTIVE_DEFAULT_CLAUDE_GPT_TARGET_FAMILY = 'gpt-5.4';
+const CLAUDE_GPT_TARGET_FAMILY_OPTIONS = [
+  { label: '默认（gpt-5.4）', value: DEFAULT_CLAUDE_GPT_TARGET_FAMILY },
+  { label: 'gpt-5.2', value: 'gpt-5.2' },
+  { label: 'gpt-5.4', value: 'gpt-5.4' },
+] as const;
+
 export function SystemPage() {
   const { t, i18n } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
@@ -66,6 +80,7 @@ export function SystemPage() {
   const [requestLogTouched, setRequestLogTouched] = useState(false);
   const [requestLogSaving, setRequestLogSaving] = useState(false);
   const [claudeRoutingSaving, setClaudeRoutingSaving] = useState(false);
+  const [claudeRoutingTargetSaving, setClaudeRoutingTargetSaving] = useState(false);
   const [claudeOpus1MSaving, setClaudeOpus1MSaving] = useState(false);
 
   const apiKeysCache = useRef<string[]>([]);
@@ -79,11 +94,16 @@ export function SystemPage() {
   const groupedModels = useMemo(() => classifyModels(models, { otherLabel }), [models, otherLabel]);
   const requestLogEnabled = config?.requestLog ?? false;
   const claudeToGptRoutingEnabled = config?.claudeToGptRoutingEnabled ?? false;
+  const claudeToGptTargetFamily = config?.claudeToGptTargetFamily?.trim() ?? '';
+  const effectiveClaudeToGptTargetFamily =
+    claudeToGptTargetFamily || EFFECTIVE_DEFAULT_CLAUDE_GPT_TARGET_FAMILY;
   const disableClaudeOpus1M = config?.disableClaudeOpus1M ?? false;
   const requestLogDirty = requestLogDraft !== requestLogEnabled;
   const canEditRequestLog = auth.connectionStatus === 'connected' && Boolean(config);
   const canEditClaudeRouting =
     auth.connectionStatus === 'connected' && Boolean(config) && !claudeRoutingSaving;
+  const canEditClaudeRoutingTarget =
+    auth.connectionStatus === 'connected' && Boolean(config) && !claudeRoutingTargetSaving;
   const canEditClaudeOpus1M =
     auth.connectionStatus === 'connected' && Boolean(config) && !claudeOpus1MSaving;
 
@@ -229,6 +249,35 @@ export function SystemPage() {
       );
     } finally {
       setClaudeRoutingSaving(false);
+    }
+  };
+
+  const handleClaudeRoutingTargetFamilyChange = async (family: string) => {
+    if (!config) return;
+
+    const previous = claudeToGptTargetFamily;
+    setClaudeRoutingTargetSaving(true);
+    updateConfigValue('claude-to-gpt-target-family', family);
+
+    try {
+      await configApi.updateClaudeToGptTargetFamily(family);
+      clearCache('claude-to-gpt-target-family');
+      showNotification(
+        t('notification.claude_to_gpt_target_family_updated', {
+          defaultValue: 'Claude 全局转 GPT 默认目标模型已更新',
+        }),
+        'success'
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+      updateConfigValue('claude-to-gpt-target-family', previous);
+      showNotification(
+        `${t('notification.update_failed')}${message ? `: ${message}` : ''}`,
+        'error'
+      );
+    } finally {
+      setClaudeRoutingTargetSaving(false);
     }
   };
 
@@ -521,7 +570,8 @@ export function SystemPage() {
           <p className={styles.sectionDescription}>
             {t('system_info.claude_to_gpt_desc', {
               defaultValue:
-                '开启后，所有客户端 API Key 发起的 Claude 模型请求都会默认改走 GPT。Opus 默认转 gpt-5.4(high)，其他 Claude 默认转 gpt-5.4(medium)。',
+                '开启后，所有客户端 API Key 发起的 Claude 模型请求都会默认改走 GPT。Opus 默认转 {{family}}(high)，其他 Claude 默认转 {{family}}(medium)。',
+              family: effectiveClaudeToGptTargetFamily,
             })}
           </p>
           <ToggleSwitch
@@ -535,6 +585,43 @@ export function SystemPage() {
               void handleClaudeRoutingToggle(value);
             }}
           />
+          <div className={styles.selectRow}>
+            <div className={styles.selectLabelBlock}>
+              <div className={styles.selectLabel}>
+                {t('system_info.claude_to_gpt_target_family_label', {
+                  defaultValue: '默认目标模型',
+                })}
+              </div>
+              <div className={styles.selectHint}>
+                {t('system_info.claude_to_gpt_target_family_hint', {
+                  defaultValue:
+                    '用于全局 Claude 转 GPT 的默认目标族；单个 API Key 如已配置自己的目标模型，将优先覆盖这里。',
+                })}
+              </div>
+            </div>
+            <div className={styles.selectWrap}>
+              <select
+                className={styles.select}
+                value={claudeToGptTargetFamily}
+                disabled={!canEditClaudeRoutingTarget}
+                onChange={(e) => {
+                  void handleClaudeRoutingTargetFamilyChange(e.target.value);
+                }}
+                aria-label={t('system_info.claude_to_gpt_target_family_label', {
+                  defaultValue: '默认目标模型',
+                })}
+              >
+                {CLAUDE_GPT_TARGET_FAMILY_OPTIONS.map((option) => (
+                  <option key={option.label} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className={styles.selectIcon}>
+                <IconChevronDown size={16} />
+              </span>
+            </div>
+          </div>
           <div className="hint">
             {t('system_info.claude_to_gpt_hint', {
               defaultValue:
